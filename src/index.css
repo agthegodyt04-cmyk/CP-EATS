@@ -1,0 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --animate-sweep: sweep 2.5s infinite linear;
+  --animate-scale-up: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fade-in 0.3s ease-out;
+
+  /* Register Semantic Theme Colors in Tailwind */
+  --color-background-primary: var(--backgroundPrimary);
+  --color-background-secondary: var(--backgroundSecondary);
+  --color-background-tertiary: var(--backgroundTertiary);
+
+  --color-surface-primary: var(--surfacePrimary);
+  --color-surface-secondary: var(--surfaceSecondary);
+
+  --color-text-primary: var(--textPrimary);
+  --color-text-secondary: var(--textSecondary);
+  --color-text-muted: var(--textMuted);
+  --color-text-inverse: var(--textInverse);
+
+  --color-brand-primary: var(--primary);
+  --color-brand-primary-container: var(--primaryContainer);
+
+  --color-brand-secondary: var(--secondary);
+  --color-brand-secondary-container: var(--secondaryContainer);
+
+  --color-feedback-success: var(--success);
+  --color-feedback-warning: var(--warning);
+  --color-feedback-error: var(--error);
+  --color-feedback-info: var(--info);
+
+  --color-border-primary: var(--borderPrimary);
+  --color-border-secondary: var(--borderSecondary);
+
+  --color-icon-primary: var(--iconPrimary);
+  --color-icon-secondary: var(--iconSecondary);
+
+  --color-shadow-theme: var(--shadow);
+  --color-divider-theme: var(--divider);
+  --color-overlay-theme: var(--overlay);
+
+  @keyframes sweep {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(180px); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes scale-up {
+    0% { transform: scale(0.96); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes fade-in {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Light Theme Design Tokens */
+:root {
+  --backgroundPrimary: #f8fafc; /* Slate 50 */
+  --backgroundSecondary: #ffffff;
+  --backgroundTertiary: #f1f5f9; /* Slate 100 */
+
+  --surfacePrimary: #ffffff;
+  --surfaceSecondary: #f1f5f9;
+
+  --textPrimary: #0f172a; /* Slate 900 */
+  --textSecondary: #334155; /* Slate 700 */
+  --textMuted: #64748b; /* Slate 500 */
+  --textInverse: #ffffff;
+
+  --primary: #4f46e5; /* Indigo 600 */
+  --primaryContainer: #e0e7ff; /* Indigo 100 */
+
+  --secondary: #0ea5e9; /* Sky 500 */
+  --secondaryContainer: #e0f2fe; /* Sky 100 */
+
+  --success: #10b981; /* Emerald 500 */
+  --warning: #f59e0b; /* Amber 500 */
+  --error: #ef4444; /* Red 500 */
+  --info: #3b82f6; /* Blue 500 */
+
+  --borderPrimary: #e2e8f0; /* Slate 200 */
+  --borderSecondary: #cbd5e1; /* Slate 300 */
+
+  --iconPrimary: #4f46e5;
+  --iconSecondary: #64748b;
+
+  --shadow: rgba(0, 0, 0, 0.05);
+  --divider: #e2e8f0;
+  --overlay: rgba(0, 0, 0, 0.4);
+}
+
+/* Dark Theme Design Tokens */
+.dark {
+  --backgroundPrimary: #020617; /* Slate 950 */
+  --backgroundSecondary: #0f172a; /* Slate 900 */
+  --backgroundTertiary: #1e293b; /* Slate 800 */
+
+  --surfacePrimary: #0f172a; /* Slate 900 */
+  --surfaceSecondary: #1e293b; /* Slate 800 */
+
+  --textPrimary: #f8fafc; /* Slate 50 */
+  --textSecondary: #cbd5e1; /* Slate 300 */
+  --textMuted: #94a3b8; /* Slate 400 */
+  --textInverse: #0f172a;
+
+  --primary: #818cf8; /* Indigo 400 */
+  --primaryContainer: #1e1b4b; /* Indigo 950 */
+
+  --secondary: #38bdf8; /* Sky 400 */
+  --secondaryContainer: #0c4a6e; /* Sky 950 */
+
+  --success: #34d399; /* Emerald 400 */
+  --warning: #fbbf24; /* Amber 400 */
+  --error: #f87171; /* Red 400 */
+  --info: #60a5fa; /* Blue 400 */
+
+  --borderPrimary: #1e293b; /* Slate 800 */
+  --borderSecondary: #334155; /* Slate 700 */
+
+  --iconPrimary: #818cf8;
+  --iconSecondary: #94a3b8;
+
+  --shadow: rgba(0, 0, 0, 0.4);
+  --divider: #1e293b;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* Smooth Premium transitions on Theme change (250ms–350ms) */
+html, body, div, p, span, button, input, select, textarea, nav, header, aside, section, article {
+  transition: background-color 280ms ease, border-color 280ms ease, color 280ms ease, fill 280ms ease, stroke 280ms ease, box-shadow 280ms ease;
+}
+
+/* Scrollbar customization */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Global Dark Mode base element overrides */
+.dark,
+.dark body,
+html.dark,
+html.dark body {
+  background-color: var(--backgroundPrimary) !important;
+  color: var(--textPrimary) !important;
+}
+
+/* Dynamic automatic semantic token fallback mapping */
+.dark .bg-white,
+.dark [class*="bg-white"] {
+  background-color: var(--backgroundSecondary) !important;
+  color: var(--textPrimary) !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-slate-50 {
+  background-color: var(--backgroundPrimary) !important;
+}
+
+.dark .text-gray-800,
+.dark .text-slate-800,
+.dark .text-gray-900,
+.dark .text-slate-900 {
+  color: var(--textPrimary) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-slate-500,
+.dark .text-gray-600,
+.dark .text-slate-600,
+.dark .text-gray-400,
+.dark .text-slate-400 {
+  color: var(--textMuted) !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-indigo-100 {
+  border-color: var(--borderPrimary) !important;
+}
+
+.dark .divide-gray-50,
+.dark .divide-gray-100 {
+  border-color: var(--borderPrimary) !important;
+}

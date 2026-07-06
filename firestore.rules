@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Standard Security Practice)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper: Is the user logged in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: Check user role (strictly authenticated)
+    function hasRole(role) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // Helper: Check if customer or admin
+    function isCustomerOrAdmin() {
+      return isSignedIn() && (hasRole('customer') || hasRole('admin'));
+    }
+
+    // Helper: Check if user can access an order (Relational Sync)
+    function canAccessOrder(orderId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid ||
+        get(/databases/$(database)/documents/orders/$(orderId)).data.kitchenId == request.auth.uid ||
+        hasRole('admin')
+      );
+    }
+
+    // User profile rules
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || hasRole('admin') || hasRole('customer'));
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if hasRole('admin');
+    }
+
+    // Kitchen details rules (strictly authenticated customers/admins or own kitchen)
+    match /kitchens/{kitchenId} {
+      allow read: if isCustomerOrAdmin() || (isSignedIn() && hasRole('kitchen') && request.auth.uid == kitchenId);
+      allow create, update: if isSignedIn() && request.auth.uid == kitchenId;
+      allow delete: if hasRole('admin');
+    }
+
+    // Menu items rules (strictly authenticated customers/admins or own kitchen menu items)
+    match /menu_items/{itemId} {
+      allow read: if isCustomerOrAdmin() || (isSignedIn() && hasRole('kitchen') && resource.data.kitchenId == request.auth.uid);
+      allow create, update: if isSignedIn() && request.resource.data.kitchenId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.kitchenId == request.auth.uid;
+    }
+
+    // Feed posts rules (strictly authenticated customers/admins or own kitchen posts)
+    match /feed_posts/{postId} {
+      allow read: if isCustomerOrAdmin() || (isSignedIn() && hasRole('kitchen') && resource.data.kitchenId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.kitchenId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.kitchenId == request.auth.uid || 
+        hasRole('admin') ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']))
+      );
+      allow delete: if isSignedIn() && resource.data.kitchenId == request.auth.uid;
+    }
+
+    // Orders rules (strictly customers/kitchens/admins who belong to the order)
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.kitchenId == request.auth.uid || 
+        hasRole('admin')
+      );
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.kitchenId == request.auth.uid ||
+        hasRole('admin')
+      );
+      allow delete: if hasRole('admin');
+    }
+
+    // Chats rules (strictly participants of the corresponding order)
+    match /chats/{messageId} {
+      allow read: if canAccessOrder(resource.data.orderId);
+      allow create: if canAccessOrder(request.resource.data.orderId);
+    }
+
+    // Reviews rules (strictly customer creator or the referenced kitchen)
+    match /reviews/{reviewId} {
+      allow read: if isCustomerOrAdmin() || (isSignedIn() && hasRole('kitchen') && resource.data.kitchenId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.kitchenId == request.auth.uid || 
+        hasRole('admin')
+      );
+    }
+
+    // Favorites rules (strictly private to user owner)
+    match /favorites/{favId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || hasRole('admin'));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
