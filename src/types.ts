@@ -19,7 +19,7 @@ export interface UserProfile {
   qrCodeUrl?: string;
   securityPin?: string;
   themePreference?: "light" | "dark";
-  createdAt: number;
+  createdAt: number | string;
 }
 
 export interface KitchenDetails {
@@ -44,6 +44,7 @@ export interface KitchenDetails {
   flatAddress?: string;
   deliveryLocations?: string[];
   securityPin?: string;
+  customCategories?: string[];
 }
 
 export interface AddOnOption {
@@ -106,7 +107,7 @@ export interface Follow {
   id: string;
   followerId: string;
   kitchenId: string;
-  createdAt: number;
+  createdAt: number | string;
 }
 
 export type OrderStatus = "PENDING" | "ACCEPTED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "COMPLETED" | "CANCELLED";
@@ -159,7 +160,7 @@ export interface ChatMessage {
     bankName?: string;
   } | null;
   qrCodeUrl?: string;
-  createdAt: number;
+  createdAt: number | string;
 }
 
 export interface KitchenDirectMessage {
@@ -173,7 +174,7 @@ export interface KitchenDirectMessage {
   recipientName: string;
   recipientHandle?: string;
   text: string;
-  createdAt: number;
+  createdAt: number | string;
 }
 
 export interface Review {

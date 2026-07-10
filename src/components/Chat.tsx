@@ -101,7 +101,7 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
             bankName: bankNameToUse || "Personal Payout"
           },
           qrCodeUrl: qrCodeUrlToUse || "",
-          createdAt: Date.now()
+          createdAt: new Date().toISOString()
         });
         setNewMessage("");
         return;
@@ -118,7 +118,7 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
         senderId,
         senderName,
         text: messageText,
-        createdAt: Date.now()
+          createdAt: new Date().toISOString()
       });
       setNewMessage("");
     } catch (err) {

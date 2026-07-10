@@ -135,7 +135,8 @@ class DatabaseService {
       society: kitchen.society,
       flatAddress: kitchen.flatAddress,
       deliveryLocations: kitchen.deliveryLocations,
-      securityPin: kitchen.securityPin
+      securityPin: kitchen.securityPin,
+      customCategories: kitchen.customCategories || []
     }]);
     if (error) throw error;
   }
@@ -161,7 +162,8 @@ class DatabaseService {
       society: updates.society,
       flatAddress: updates.flatAddress,
       deliveryLocations: updates.deliveryLocations,
-      securityPin: updates.securityPin
+      securityPin: updates.securityPin,
+      customCategories: updates.customCategories
     }).eq('id', kitchenId);
     if (error) throw error;
   }
@@ -646,7 +648,8 @@ class DatabaseService {
       society: data.society,
       flatAddress: data.flatAddress,
       deliveryLocations: data.deliveryLocations,
-      securityPin: data.securityPin
+      securityPin: data.securityPin,
+      customCategories: Array.isArray(data.customCategories) ? data.customCategories : []
     };
   }
 

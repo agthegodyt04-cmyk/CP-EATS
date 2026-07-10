@@ -41,7 +41,7 @@ export default function ReviewDialog({
         customerName,
         rating,
         comment: comment.trim(),
-        createdAt: Date.now(),
+        createdAt: new Date().toISOString(),
         isVerifiedHandshake: true,
       };
 

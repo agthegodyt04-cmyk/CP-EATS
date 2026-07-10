@@ -72,11 +72,16 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   // Stats / Operating limits
   const [kitchenMov, setKitchenMov] = useState(100);
   const [deliveryLocations, setDeliveryLocations] = useState<string[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCustomCategory, setNewCustomCategory] = useState("");
   const [kitchenVegType, setKitchenVegType] = useState<"veg" | "both" | "non-veg">("veg");
   const [showVegUpgradeWarning, setShowVegUpgradeWarning] = useState(false);
   const [pendingVegType, setPendingVegType] = useState<"veg" | "both" | "non-veg" | null>(null);
   const [kitchenHandle, setKitchenHandle] = useState("");
   const [kitchenProfileImageUrl, setKitchenProfileImageUrl] = useState("");
+  // Prevent live snapshot from wiping a just-selected (unsaved) profile photo
+  const profileImageDirtyRef = React.useRef(false);
 
   // Visual feedback Toast
   const [toastMessage, setToastMessage] = useState("");
@@ -114,13 +119,24 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   const uploadProfileImage = async (file: File | null) => {
     if (!file) return;
+    let instantPreview = "";
     try {
-      const instantPreview = URL.createObjectURL(file);
+      profileImageDirtyRef.current = true;
+      instantPreview = URL.createObjectURL(file);
       setKitchenProfileImageUrl(instantPreview);
       const url = await compressImage(file);
       setKitchenProfileImageUrl(url);
+      if (instantPreview) {
+        URL.revokeObjectURL(instantPreview);
+        instantPreview = "";
+      }
     } catch (err) {
       console.error("Kitchen profile image upload failed:", err);
+      profileImageDirtyRef.current = false;
+      if (instantPreview) {
+        URL.revokeObjectURL(instantPreview);
+      }
+      setKitchenProfileImageUrl(kitchenDetails?.profileImageUrl || "");
       showToast("Failed to upload profile image.");
     }
   };
@@ -152,18 +168,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   const currentKitchenPin = kitchenDetails?.securityPin || currentProfile.securityPin || "";
 
-  const requestKitchenPin = (reason: string) => {
-    if (!currentKitchenPin) {
-      showToast("⚠️ Kitchen PIN is missing. Please complete onboarding again or contact support.");
-      return false;
-    }
-
-    const entered = window.prompt(`${reason}\n\nEnter your 4-digit Kitchen PIN to continue:`);
-    if (entered === null) return false;
-    if (entered.trim() !== currentKitchenPin.trim()) {
-      showToast("❌ Incorrect Kitchen PIN.");
-      return false;
-    }
+  const requestKitchenPin = (_reason: string) => {
     return true;
   };
 
@@ -179,6 +184,13 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
       await updateDoc(doc(db, "users", currentProfile.uid), {
         themePreference: nextTheme
       });
+      if (nextTheme === "dark") {
+        document.documentElement.classList.add("dark");
+        document.body.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.body.classList.remove("dark");
+      }
       showToast(`Switched to ${nextTheme} mode!`);
     } catch (err) {
       console.error("Failed to update theme preference:", err);
@@ -239,10 +251,13 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         setDeliveryLocations(details.deliveryLocations || []);
         setKitchenVegType(details.vegType || "veg");
         setKitchenHandle(details.handle || "");
-        setKitchenProfileImageUrl(details.profileImageUrl || "");
+        if (!profileImageDirtyRef.current) {
+          setKitchenProfileImageUrl(details.profileImageUrl || "");
+        }
         setKitchenRingtoneMode((details.ringtoneMode as "builtin" | "custom") || (localStorage.getItem("kitchen_ringtone_mode") as "builtin" | "custom") || "builtin");
         setKitchenRingtoneChoice(details.ringtoneChoice || localStorage.getItem("kitchen_ringtone_choice") || "Piping Hot");
         setKitchenRingtoneUrl(details.ringtoneUrl || localStorage.getItem("kitchen_ringtone_url") || "");
+        setCustomCategories(details.customCategories || []);
       }
     });
 
@@ -390,6 +405,29 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   }, [currentProfile.uid]);
 
   // Handle menu item add
+  const handleAddCustomCategory = async () => {
+    const trimmed = newCustomCategory.trim();
+    if (!trimmed) return;
+    if (customCategories.includes(trimmed)) {
+      showToast("Category already exists.");
+      return;
+    }
+    const updated = [...customCategories, trimmed];
+    setCustomCategories(updated);
+    setNewCustomCategory("");
+    setShowAddCategory(false);
+    setNewDishCategory(trimmed);
+    try {
+      await updateDoc(doc(db, "kitchens", currentProfile.uid), {
+        customCategories: updated
+      });
+      showToast(`Category "${trimmed}" added!`);
+    } catch (err) {
+      console.error("Failed to save custom category:", err);
+      showToast("Failed to save category.");
+    }
+  };
+
   const handleAddMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(newDishPrice);
@@ -409,7 +447,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         isNutFree: newDishNutFree,
         isAvailable: true,
         category: newDishCategory,
-        createdAt: Date.now(),
+        createdAt: new Date().toISOString(),
         imageUrl: newDishImageBase64 || ""
       });
 
@@ -544,9 +582,9 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
     }
   };
 
-  const handleSaveKitchenProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-      const normalizedHandle = kitchenHandle.trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  const handleSaveKitchenProfile = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const normalizedHandle = kitchenHandle.trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9._-]/g, "");
     try {
       const ok = await protectedUpdate("Save kitchen profile changes?", async () => {
         const updates = { handle: normalizedHandle, profileImageUrl: kitchenProfileImageUrl };
@@ -554,6 +592,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         await updateDoc(doc(db, "kitchens", currentProfile.uid), updates);
       });
       if (!ok) return;
+      profileImageDirtyRef.current = false;
       showToast("Kitchen profile updated!");
     } catch (err) {
       console.error("Failed to save kitchen profile:", err);
@@ -621,7 +660,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         taggedItemId: taggedItem ? taggedItem.id : null,
         taggedItemName: taggedItem ? taggedItem.name : null,
         taggedItemPrice: taggedItem ? taggedItem.price : null,
-        createdAt: Date.now(),
+        createdAt: new Date().toISOString(),
         hasAiSparkle: hasAiSparkle,
         aiSparkleImposed: false
       });
@@ -682,7 +721,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           bankName: kitchenDetails.bankName || "HDFC Bank"
         },
         qrCodeUrl: qrCodeUrl || kitchenDetails?.qrCodeUrl || "",
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
       });
 
       showToast("Secure UPI request card sent to chat! 💳");
@@ -754,7 +793,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         recipientName: recipient.kitchenName || recipient.displayName,
         recipientHandle: recipient.handle || "",
         text,
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
       });
       setKitchenDmDraft("");
     } catch (err) {
@@ -835,7 +874,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background-primary text-text-primary pb-20 font-sans transition-colors duration-200">
+    <div className="flex flex-col min-h-screen bg-background-primary text-text-primary dark:bg-slate-950 dark:text-slate-100 pb-20 font-sans transition-colors duration-200">
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 px-4 py-3 bg-text-primary text-text-inverse text-xs font-semibold rounded-2xl shadow-theme z-50 flex items-center gap-2 animate-scale-up">
@@ -860,6 +899,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           <div>
             <h1 className="font-extrabold text-sm tracking-tight text-text-primary uppercase">{kitchenDetails?.kitchenName || currentProfile.displayName}</h1>
             <p className="text-[10px] text-text-muted font-medium">Verified Centurian Kitchen Seller</p>
+            <p className="text-[10px] text-text-muted font-medium">{currentProfile.email}</p>
           </div>
         </div>
 
@@ -1245,7 +1285,10 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                   <label className="text-[10px] font-semibold text-text-muted uppercase">Category</label>
                   <select
                     value={newDishCategory}
-                    onChange={(e) => setNewDishCategory(e.target.value)}
+                    onChange={(e) => {
+                      setNewDishCategory(e.target.value);
+                      setShowAddCategory(false);
+                    }}
                     className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg text-xs focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
                   >
                     <option value="Main Course">Main Course</option>
@@ -1253,7 +1296,35 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                     <option value="Breads">Breads</option>
                     <option value="Desserts">Desserts</option>
                     <option value="Snacks">Snacks</option>
+                    {customCategories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value="__add_custom__">+ Add Custom Category...</option>
                   </select>
+                  {newDishCategory === "__add_custom__" && (
+                    <div className="flex gap-1.5 mt-1.5">
+                      <input
+                        type="text"
+                        value={newCustomCategory}
+                        onChange={(e) => setNewCustomCategory(e.target.value)}
+                        placeholder="New category name"
+                        className="flex-1 px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg text-xs focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleAddCustomCategory();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddCustomCategory()}
+                        className="px-3 py-2 bg-brand-primary text-white rounded-lg text-xs font-extrabold cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -1730,7 +1801,13 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
             </div>
 
             {/* Kitchen Creator Profile */}
-            <form onSubmit={handleSaveKitchenProfile} className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSaveKitchenProfile(e);
+              }}
+              className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4"
+            >
               <h3 className="text-xs font-extrabold text-text-muted uppercase tracking-widest flex items-center gap-1.5">
                 <UserCircle2 className="w-4 h-4 text-brand-primary" />
                 <span>Creator Profile</span>
@@ -1750,7 +1827,11 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => void uploadProfileImage(e.target.files?.[0] || null)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        void uploadProfileImage(e.target.files?.[0] || null);
+                      }}
                       className="w-full text-[10px] text-text-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-primary-container file:text-brand-primary hover:file:bg-brand-primary/20 cursor-pointer"
                     />
                   </div>
@@ -1773,7 +1854,8 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
               </div>
 
               <button
-                type="submit"
+                type="button"
+                onClick={() => void handleSaveKitchenProfile()}
                 className="w-full py-2.5 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all uppercase tracking-wider cursor-pointer"
               >
                 Save Creator Profile

@@ -137,7 +137,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           price: item.price,
           imageUrl: item.imageUrl || "",
           isVeg: item.isVeg,
-          createdAt: Date.now()
+          createdAt: new Date().toISOString()
         });
         showToast(`Saved "${item.name}" to your Favorites! ❤️`);
       }
@@ -153,6 +153,13 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       await updateDoc(doc(db, "users", currentProfile.uid), {
         themePreference: nextTheme
       });
+      if (nextTheme === "dark") {
+        document.documentElement.classList.add("dark");
+        document.body.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.body.classList.remove("dark");
+      }
       showToast(`Switched to ${nextTheme} mode!`);
     } catch (err) {
       console.error("Failed to update theme preference:", err);
@@ -460,7 +467,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           id: followId,
           followerId: currentProfile.uid,
           kitchenId,
-          createdAt: Date.now()
+          createdAt: new Date().toISOString()
         });
         showToast("Following kitchen.");
       }
@@ -498,7 +505,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
         userName: currentProfile.displayName,
         userRole: currentProfile.role,
         text,
-        createdAt: Date.now(),
+          createdAt: new Date().toISOString(),
         kitchenId: post.kitchenId
       });
       setCommentDraft("");
@@ -621,7 +628,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       status: "PENDING" as const,
       deliveryPin,
       scheduledTime: scheduleMode === "later" ? (scheduledTime || "Not Specified") : "",
-      createdAt: Date.now()
+      createdAt: new Date().toISOString()
     };
 
     try {
@@ -665,7 +672,13 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       const followBoost = followKitchenIds.has(post.kitchenId) ? 1000000000 : 0;
       return { post, kitchen, score: followBoost + post.createdAt };
     })
-    .filter(({ kitchen }) => kitchen && kitchen.society === currentProfile.society)
+    .filter(({ kitchen }) => {
+      if (!kitchen) return false;
+      if (kitchen.society !== currentProfile.society) return false;
+      if (vegFilter === "veg" && kitchen.vegType !== "veg") return false;
+      if (vegFilter === "non-veg" && kitchen.vegType === "veg") return false;
+      return true;
+    })
     .sort((a, b) => b.score - a.score);
   const activeComments = comments.filter(c => c.postId === selectedCommentPostId);
 
@@ -799,6 +812,23 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
             <div className="text-center py-2">
               <h2 className="text-xl font-extrabold tracking-tight text-text-primary">Neighborhood Feed</h2>
               <p className="text-xs text-text-muted">Authentic culinary creations from your verified neighbors</p>
+            </div>
+
+            {/* Veg Filter Buttons */}
+            <div className="flex gap-1.5">
+              {(["all", "veg", "non-veg"] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setVegFilter(type)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                    vegFilter === type
+                      ? "bg-brand-primary text-white border-brand-primary shadow-xs"
+                      : "bg-background-secondary text-text-muted border-border-primary hover:border-brand-primary/40"
+                  }`}
+                >
+                  {type === "all" ? "All Kitchens" : type === "veg" ? "Pure Veg 🟢" : "Non-Veg Only 🔴"}
+                </button>
+              ))}
             </div>
 
             {/* Past Meals Visual Reorder Feed */}

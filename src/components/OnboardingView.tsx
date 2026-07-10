@@ -57,18 +57,18 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
       if (draft.selectedFloor !== undefined) setSelectedFloor(draft.selectedFloor);
       if (draft.selectedFlat) setSelectedFlat(draft.selectedFlat);
       if (draft.myGateId) setMyGateId(draft.myGateId);
-      if (draft.myGateScreenshot) setMyGateScreenshot(draft.myGateScreenshot);
+      // Intentionally do not restore large base64 images from draft (quota / remount safety).
       if (draft.securityPin) setSecurityPin(draft.securityPin);
       if (draft.kitchenVegType) setKitchenVegType(draft.kitchenVegType);
       if (draft.handle) setHandle(draft.handle);
-      if (draft.profileImageUrl) setProfileImageUrl(draft.profileImageUrl);
     } catch (err) {
       console.debug("Ignoring invalid onboarding draft:", err);
     }
   }, [draftKey]);
 
   useEffect(() => {
-    const draft = {
+    // Keep text/step draft only — large base64 images blow localStorage and can crash remount recovery.
+    const draftWithoutImages = {
       step,
       direction,
       role,
@@ -81,13 +81,28 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
       selectedFloor,
       selectedFlat,
       myGateId,
-      myGateScreenshot,
       securityPin,
       kitchenVegType,
       handle,
-      profileImageUrl,
     };
-    localStorage.setItem(draftKey, JSON.stringify(draft));
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(draftWithoutImages));
+    } catch (err) {
+      console.debug("Failed to persist onboarding draft:", err);
+      try {
+        localStorage.removeItem(draftKey);
+        localStorage.setItem(draftKey, JSON.stringify({
+          step,
+          role,
+          displayName,
+          phone,
+          myGateId,
+          handle,
+        }));
+      } catch {
+        // Ignore quota failures; in-memory state still works for this session.
+      }
+    }
   }, [
     draftKey,
     step,
@@ -102,11 +117,9 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
     selectedFloor,
     selectedFlat,
     myGateId,
-    myGateScreenshot,
     securityPin,
     kitchenVegType,
     handle,
-    profileImageUrl,
   ]);
 
   useEffect(() => {
@@ -132,6 +145,8 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
       window.navigator.vibrate(20);
     }
   };
+
+  const finalStep = role === "kitchen" ? 5 : 4;
 
   const validateStep = () => {
     setError("");
@@ -166,7 +181,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
         return false;
       }
     }
-    if (step === (role === "kitchen" ? 5 : 4)) {
+    if (step === finalStep) {
       if (!myGateId.trim()) {
         setError("Please enter your MyGate verification ID.");
         return false;
@@ -183,7 +198,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
     triggerHaptic();
     if (validateStep()) {
       setDirection(1);
-      setStep((prev) => Math.min(prev + 1, role === "kitchen" ? 5 : 4));
+      setStep((prev) => Math.min(prev + 1, finalStep));
     }
   };
 
@@ -203,9 +218,14 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
     return [code, message, details, hint].filter(Boolean).join(": ");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     triggerHaptic();
+    // Never complete onboarding from intermediate steps or accidental form submits
+    // (e.g. mobile file-picker return / Enter key while uploading pfp or MyGate proof).
+    if (step !== finalStep) {
+      return;
+    }
     if (!validateStep()) return;
 
     setSubmitting(true);
@@ -257,7 +277,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
         myGateId: myGateId.trim().toUpperCase(),
         myGateScreenshot,
         status: "verified",
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
       };
 
       if (role === "kitchen") {
@@ -274,7 +294,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
         email: userEmail,
         role,
         flatAddress,
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
       });
 
       if (role === "kitchen") {
@@ -282,7 +302,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
           uid: userId,
           email: userEmail,
           handle: handleRegistryId,
-          createdAt: Date.now()
+          createdAt: new Date().toISOString()
         });
       }
 
@@ -333,7 +353,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
     }
   };
 
-  const progressPercentage = (step / (role === "kitchen" ? 5 : 4)) * 100;
+  const progressPercentage = (step / finalStep) * 100;
   const addressStep = role === "kitchen" ? 4 : 3;
 
   const handleProfilePhotoUpload = async (file: File | null) => {
@@ -399,7 +419,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
               </button>
             )}
             <div className={`text-xs font-black uppercase tracking-wider text-brand-primary ${step === 1 ? 'ml-auto' : ''}`}>
-              Step {step} of {role === "kitchen" ? 5 : 4}
+              Step {step} of {finalStep}
             </div>
           </div>
 
@@ -414,7 +434,16 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
         </div>
 
         <div className="p-6 sm:p-8 min-h-[360px] flex flex-col justify-between">
-          <form onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between space-y-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              // Block implicit submit (Enter / file-picker quirks); only explicit Complete button finishes.
+              if (step === finalStep) {
+                void handleSubmit(e);
+              }
+            }}
+            className="flex-1 flex flex-col justify-between space-y-6"
+          >
             
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
@@ -547,7 +576,11 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => void handleProfilePhotoUpload(e.target.files?.[0] || null)}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                void handleProfilePhotoUpload(e.target.files?.[0] || null);
+                              }}
                               className="flex-1 text-xs text-gray-500 dark:text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-primary-container file:text-brand-primary hover:file:bg-brand-primary/20 cursor-pointer"
                             />
                           </div>
@@ -825,7 +858,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
                   </div>
                 )}
 
-                {step === (role === "kitchen" ? 5 : 4) && (
+                {step === finalStep && (
                   <div className="space-y-5">
                     <div className="space-y-1">
                       <h3 className="text-xl font-extrabold text-gray-900 dark:text-slate-100 tracking-tight">
@@ -879,13 +912,20 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
                           type="file"
                           accept="image/*"
                           required
+                          onClick={(e) => e.stopPropagation()}
                           onChange={async (e) => {
+                            e.stopPropagation();
                             const file = e.target.files?.[0];
                             if (!file) return;
-                            const compressedFile = await compressImageFile(file, 1200, 1200, 0.8);
-                            setMyGateScreenshotFile(compressedFile);
-                            const url = await fileToDataUrl(compressedFile);
-                            setMyGateScreenshot(url);
+                            try {
+                              const compressedFile = await compressImageFile(file, 1200, 1200, 0.8);
+                              setMyGateScreenshotFile(compressedFile);
+                              const url = await fileToDataUrl(compressedFile);
+                              setMyGateScreenshot(url);
+                            } catch (err) {
+                              console.error("MyGate screenshot upload failed:", err);
+                              setError("Failed to upload MyGate screenshot.");
+                            }
                           }}
                           className="w-full text-xs text-gray-500 dark:text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-primary-container file:text-brand-primary hover:file:bg-brand-primary/20 cursor-pointer"
                         />
@@ -925,7 +965,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
             </AnimatePresence>
 
             <div className="pt-6 flex items-center justify-end gap-3 border-t border-gray-50 dark:border-slate-850 mt-auto">
-            {step < (role === "kitchen" ? 5 : 4) ? (
+            {step < finalStep ? (
                 <button
                   type="button"
                   onClick={handleNext}
@@ -936,8 +976,9 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
                 </button>
               ) : (
                 <button
-                  type="submit"
+                  type="button"
                   disabled={submitting}
+                  onClick={() => void handleSubmit()}
                   className="w-full py-3 bg-brand-primary hover:bg-brand-primary/95 disabled:bg-brand-primary/50 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {submitting ? (

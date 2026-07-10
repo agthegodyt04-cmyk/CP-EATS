@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS kitchens (
   society TEXT,
   "flatAddress" TEXT,
   "deliveryLocations" JSONB DEFAULT '[]',
-  "securityPin" TEXT
+  "securityPin" TEXT,
+  "customCategories" TEXT[] DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS menu_items (

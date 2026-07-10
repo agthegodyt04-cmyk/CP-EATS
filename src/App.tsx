@@ -70,29 +70,20 @@ export default function App() {
         const nextUserId = supabaseUser?.id ?? null;
         const prevUserId = lastAuthUserIdRef.current;
         const userChanged = nextUserId !== prevUserId;
-        // Full-screen loading only on real session changes — not TOKEN_REFRESHED
-        // (file pickers background the tab and often trigger refresh on return).
-        const shouldShowLoading =
-          event === "INITIAL_SESSION" ||
-          event === "SIGNED_IN" ||
-          event === "SIGNED_OUT" ||
-          event === "USER_UPDATED" ||
-          userChanged;
 
-        if (!userChanged && event === "TOKEN_REFRESHED" && nextUserId) {
-          // Same user, token only — keep current UI mounted
+        // File pickers background the tab; Supabase often fires TOKEN_REFRESHED on return.
+        // Never remount the app for token-only events.
+        if (event === "TOKEN_REFRESHED") {
           return;
         }
 
-        if (!userChanged && nextUserId && profileUidRef.current === nextUserId && event !== "USER_UPDATED") {
-          // Already hydrated this user; skip remount for duplicate session events
-          lastAuthUserIdRef.current = nextUserId;
+        // Skip duplicate session events for the same user (keeps onboarding/settings mounted).
+        // Still allow USER_UPDATED to re-fetch profile metadata.
+        if (!userChanged && prevUserId !== null && event !== "USER_UPDATED") {
           return;
         }
 
-        if (shouldShowLoading) {
-          setLoading(true);
-        }
+        setLoading(true);
 
         // Clean up any existing profile subscription
         if (unsubProfile) {
