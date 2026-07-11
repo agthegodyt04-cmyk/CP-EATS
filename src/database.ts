@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { UserProfile, KitchenDetails, MenuItem, FeedPost, Order, ChatMessage, KitchenDirectMessage, PostComment, Follow, Review } from './types';
+import { normalizePayload, resolveColumn } from './db';
 
 export type { UserProfile, KitchenDetails, MenuItem, FeedPost, Order, ChatMessage, KitchenDirectMessage, PostComment, Follow, Review };
 
@@ -52,13 +53,13 @@ class DatabaseService {
     if (user.profileImageUrl !== undefined) userData.profileImageUrl = user.profileImageUrl;
     if (user.themePreference !== undefined) userData.themePreference = user.themePreference;
 
-    const { data, error } = await supabase.from('users').insert([userData]).select().single();
+    const { data, error } = await supabase.from('users').insert(normalizePayload('users', [userData])).select().single();
     if (error) throw error;
     return this.mapToUserProfile(data);
   }
 
   async updateUser(userId: string, updates: Partial<UserProfile>): Promise<void> {
-    const { error } = await supabase.from('users').update({
+    const { error } = await supabase.from('users').update(normalizePayload('users', {
       name: updates.displayName,
       role: updates.role,
       phone: updates.phone,
@@ -75,7 +76,7 @@ class DatabaseService {
       handle: updates.handle,
       profileImageUrl: updates.profileImageUrl,
       themePreference: updates.themePreference
-    }).eq('id', userId);
+    })).eq('id', userId);
     if (error) throw error;
   }
 
@@ -114,7 +115,7 @@ class DatabaseService {
   }
 
   async createKitchen(kitchen: KitchenDetails): Promise<void> {
-    const { error } = await supabase.from('kitchens').insert([{
+    const { error } = await supabase.from('kitchens').insert(normalizePayload('kitchens', [{
       id: kitchen.uid,
       kitchenName: kitchen.kitchenName,
       handle: kitchen.handle,
@@ -137,12 +138,12 @@ class DatabaseService {
       deliveryLocations: kitchen.deliveryLocations,
       securityPin: kitchen.securityPin,
       customCategories: kitchen.customCategories || []
-    }]);
+    }]));
     if (error) throw error;
   }
 
   async updateKitchen(kitchenId: string, updates: Partial<KitchenDetails>): Promise<void> {
-    const { error } = await supabase.from('kitchens').update({
+    const { error } = await supabase.from('kitchens').update(normalizePayload('kitchens', {
       kitchenName: updates.kitchenName,
       handle: updates.handle,
       profileImageUrl: updates.profileImageUrl,
@@ -164,7 +165,7 @@ class DatabaseService {
       deliveryLocations: updates.deliveryLocations,
       securityPin: updates.securityPin,
       customCategories: updates.customCategories
-    }).eq('id', kitchenId);
+    })).eq('id', kitchenId);
     if (error) throw error;
   }
 
@@ -183,8 +184,8 @@ class DatabaseService {
   async getMenuItems(kitchenId?: string): Promise<MenuItem[]> {
     try {
       let query = supabase.from('menu_items').select('*');
-      if (kitchenId) query = query.eq('kitchenId', kitchenId);
-      const { data, error } = await query.order('createdAt', { ascending: false });
+      if (kitchenId) query = query.eq(resolveColumn('menu_items', 'kitchenId'), kitchenId);
+      const { data, error } = await query.order(resolveColumn('menu_items', 'createdAt'), { ascending: false });
       if (error) throw error;
       return data.map(this.mapToMenuItem);
     } catch (error) {
@@ -194,7 +195,7 @@ class DatabaseService {
   }
 
   async createMenuItem(item: MenuItem): Promise<MenuItem> {
-    const { data, error } = await supabase.from('menu_items').insert([{
+    const { data, error } = await supabase.from('menu_items').insert(normalizePayload('menu_items', [{
       id: item.id,
       kitchenId: item.kitchenId,
       name: item.name,
@@ -208,13 +209,13 @@ class DatabaseService {
       createdAt: new Date(item.createdAt).toISOString(),
       imageUrl: item.imageUrl,
       addOnGroups: item.addOnGroups
-    }]).select().single();
+    }])).select().single();
     if (error) throw error;
     return this.mapToMenuItem(data);
   }
 
   async updateMenuItem(itemId: string, updates: Partial<MenuItem>): Promise<void> {
-    const { error } = await supabase.from('menu_items').update({
+    const { error } = await supabase.from('menu_items').update(normalizePayload('menu_items', {
       name: updates.name,
       description: updates.description,
       price: updates.price,
@@ -225,7 +226,7 @@ class DatabaseService {
       category: updates.category,
       imageUrl: updates.imageUrl,
       addOnGroups: updates.addOnGroups
-    }).eq('id', itemId);
+    })).eq('id', itemId);
     if (error) throw error;
   }
 
@@ -237,7 +238,7 @@ class DatabaseService {
   // ---------- Feed Posts ----------
   async getFeedPosts(): Promise<FeedPost[]> {
     try {
-      const { data, error } = await supabase.from('feed_posts').select('*').order('createdAt', { ascending: false });
+      const { data, error } = await supabase.from('feed_posts').select('*').order(resolveColumn('feed_posts', 'createdAt'), { ascending: false });
       if (error) throw error;
       return data.map(this.mapToFeedPost);
     } catch (error) {
@@ -247,20 +248,18 @@ class DatabaseService {
   }
 
   async createFeedPost(post: FeedPost): Promise<void> {
-    const { error } = await supabase.from('feed_posts').insert([{
+    const { error } = await supabase.from('feed_posts').insert(normalizePayload('feed_posts', [{
       id: post.id,
       kitchenId: post.kitchenId,
       kitchenName: post.kitchenName,
       description: post.description,
       imageUrl: post.imageUrl,
       likes: post.likes,
-      taggedItemId: post.taggedItemId,
-      taggedItemName: post.taggedItemName,
-      taggedItemPrice: post.taggedItemPrice,
+      taggedItemIds: post.taggedItemIds || [],
       createdAt: new Date(post.createdAt).toISOString(),
       hasAiSparkle: post.hasAiSparkle,
       aiSparkleImposed: post.aiSparkleImposed
-    }]);
+    }]));
     if (error) throw error;
   }
 
@@ -281,7 +280,7 @@ class DatabaseService {
 
   // ---------- Orders ----------
   async createOrder(order: Order): Promise<Order> {
-    const { data, error } = await supabase.from('orders').insert([{
+    const { data, error } = await supabase.from('orders').insert(normalizePayload('orders', [{
       id: order.id,
       customerId: order.customerId,
       customerName: order.customerName,
@@ -297,14 +296,14 @@ class DatabaseService {
       deliveryPin: order.deliveryPin,
       createdAt: new Date(order.createdAt).toISOString(),
       scheduledTime: order.scheduledTime
-    }]).select().single();
+    }])).select().single();
     if (error) throw error;
     return order;
   }
 
   async getOrdersByKitchen(kitchenId: string): Promise<Order[]> {
     try {
-      const { data, error } = await supabase.from('orders').select('*').eq('kitchenId', kitchenId).order('createdAt', { ascending: false });
+      const { data, error } = await supabase.from('orders').select('*').eq(resolveColumn('orders', 'kitchenId'), kitchenId).order(resolveColumn('orders', 'createdAt'), { ascending: false });
       if (error) throw error;
       return data.map(this.mapToOrder);
     } catch (error) {
@@ -315,7 +314,7 @@ class DatabaseService {
 
   async getOrdersByCustomer(customerId: string): Promise<Order[]> {
     try {
-      const { data, error } = await supabase.from('orders').select('*').eq('customerId', customerId).order('createdAt', { ascending: false });
+      const { data, error } = await supabase.from('orders').select('*').eq(resolveColumn('orders', 'customerId'), customerId).order(resolveColumn('orders', 'createdAt'), { ascending: false });
       if (error) throw error;
       return data.map(this.mapToOrder);
     } catch (error) {
@@ -337,7 +336,7 @@ class DatabaseService {
       const { error } = await supabase.from('favorites').delete().eq('id', favId);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from('favorites').insert([{
+      const { error } = await supabase.from('favorites').insert(normalizePayload('favorites', [{
         id: favId,
         userId,
         menuItemId: item.id,
@@ -347,7 +346,7 @@ class DatabaseService {
         imageUrl: item.imageUrl || '',
         isVeg: item.isVeg,
         createdAt: new Date().toISOString()
-      }]);
+      }]));
       if (error) throw error;
     }
   }
@@ -360,7 +359,7 @@ class DatabaseService {
 
   async getFavorites(userId: string): Promise<any[]> {
     try {
-      const { data, error } = await supabase.from('favorites').select('*').eq('userId', userId);
+      const { data, error } = await supabase.from('favorites').select('*').eq(resolveColumn('favorites', 'userId'), userId);
       if (error) throw error;
       return data;
     } catch (error) {
@@ -377,7 +376,7 @@ class DatabaseService {
       const { error } = await supabase.from('follows').delete().eq('id', followId);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from('follows').insert([{ id: followId, followerId: userId, kitchenId, createdAt: new Date().toISOString() }]);
+      const { error } = await supabase.from('follows').insert(normalizePayload('follows', [{ id: followId, followerId: userId, kitchenId, createdAt: new Date().toISOString() }]));
       if (error) throw error;
     }
   }
@@ -390,7 +389,7 @@ class DatabaseService {
 
   async getFollows(userId: string): Promise<Follow[]> {
     try {
-      const { data, error } = await supabase.from('follows').select('*').eq('followerId', userId);
+      const { data, error } = await supabase.from('follows').select('*').eq(resolveColumn('follows', 'followerId'), userId);
       if (error) throw error;
       return data.map(d => ({ id: d.id, followerId: d.followerId, kitchenId: d.kitchenId, createdAt: new Date(d.createdAt).getTime() } as Follow));
     } catch (error) {
@@ -401,7 +400,7 @@ class DatabaseService {
 
   // ---------- Comments ----------
   async createComment(comment: PostComment): Promise<void> {
-    const { error } = await supabase.from('comments').insert([{
+    const { error } = await supabase.from('comments').insert(normalizePayload('comments', [{
       id: comment.id,
       postId: comment.postId,
       userId: comment.userId,
@@ -410,13 +409,13 @@ class DatabaseService {
       text: comment.text,
       createdAt: new Date(comment.createdAt).toISOString(),
       kitchenId: comment.kitchenId
-    }]);
+    }]));
     if (error) throw error;
   }
 
   async getComments(postId: string): Promise<PostComment[]> {
     try {
-      const { data, error } = await supabase.from('comments').select('*').eq('postId', postId);
+      const { data, error } = await supabase.from('comments').select('*').eq(resolveColumn('comments', 'postId'), postId);
       if (error) throw error;
       return data.map(this.mapToPostComment);
     } catch (error) {
@@ -438,7 +437,7 @@ class DatabaseService {
 
   // ---------- Reviews ----------
   async createReview(review: Review): Promise<void> {
-    const { error } = await supabase.from('reviews').insert([{
+    const { error } = await supabase.from('reviews').insert(normalizePayload('reviews', [{
       id: review.id,
       orderId: review.orderId,
       customerId: review.customerId,
@@ -449,13 +448,13 @@ class DatabaseService {
       createdAt: new Date(review.createdAt).toISOString(),
       isHandpicked: review.isHandpicked,
       taggedItemIds: review.taggedItemIds
-    }]);
+    }]));
     if (error) throw error;
   }
 
   async getReviews(kitchenId: string): Promise<Review[]> {
     try {
-      const { data, error } = await supabase.from('reviews').select('*').eq('kitchenId', kitchenId);
+      const { data, error } = await supabase.from('reviews').select('*').eq(resolveColumn('reviews', 'kitchenId'), kitchenId);
       if (error) throw error;
       return data.map(this.mapToReview);
     } catch (error) {
@@ -482,13 +481,13 @@ class DatabaseService {
 
   // ---------- Notifications ----------
   async createNotification(notification: any): Promise<void> {
-    const { error } = await supabase.from('notifications').insert([notification]);
+    const { error } = await supabase.from('notifications').insert(normalizePayload('notifications', [notification]));
     if (error) throw error;
   }
 
   async getNotifications(userId: string): Promise<any[]> {
     try {
-      const { data, error } = await supabase.from('notifications').select('*').eq('userId', userId).order('createdAt', { ascending: false });
+      const { data, error } = await supabase.from('notifications').select('*').eq(resolveColumn('notifications', 'userId'), userId).order(resolveColumn('notifications', 'createdAt'), { ascending: false });
       if (error) throw error;
       return data;
     } catch (error) {
@@ -504,7 +503,7 @@ class DatabaseService {
 
   // ---------- Chats ----------
   async createChatMessage(message: ChatMessage): Promise<void> {
-    const { error } = await supabase.from('chats').insert([{
+    const { error } = await supabase.from('chats').insert(normalizePayload('chats', [{
       id: message.id,
       orderId: message.orderId,
       senderId: message.senderId,
@@ -514,13 +513,13 @@ class DatabaseService {
       upiCardData: message.upiCardData,
       qrCodeUrl: message.qrCodeUrl,
       createdAt: new Date(message.createdAt).toISOString()
-    }]);
+    }]));
     if (error) throw error;
   }
 
   async getChatMessages(orderId: string): Promise<ChatMessage[]> {
     try {
-      const { data, error } = await supabase.from('chats').select('*').eq('orderId', orderId).order('createdAt', { ascending: true });
+      const { data, error } = await supabase.from('chats').select('*').eq(resolveColumn('chats', 'orderId'), orderId).order(resolveColumn('chats', 'createdAt'), { ascending: true });
       if (error) throw error;
       return data.map(this.mapToChatMessage);
     } catch (error) {
@@ -531,7 +530,7 @@ class DatabaseService {
 
   // ---------- Kitchen DMs ----------
   async createKitchenDM(message: KitchenDirectMessage): Promise<void> {
-    const { error } = await supabase.from('kitchen_chats').insert([{
+    const { error } = await supabase.from('kitchen_chats').insert(normalizePayload('kitchen_chats', [{
       id: message.id,
       conversationId: message.conversationId,
       participants: message.participants,
@@ -543,13 +542,13 @@ class DatabaseService {
       recipientHandle: message.recipientHandle,
       text: message.text,
       createdAt: new Date(message.createdAt).toISOString()
-    }]);
+    }]));
     if (error) throw error;
   }
 
   async getKitchenDMs(conversationId: string): Promise<KitchenDirectMessage[]> {
     try {
-      const { data, error } = await supabase.from('kitchen_chats').select('*').eq('conversationId', conversationId).order('createdAt', { ascending: true });
+      const { data, error } = await supabase.from('kitchen_chats').select('*').eq(resolveColumn('kitchen_chats', 'conversationId'), conversationId).order(resolveColumn('kitchen_chats', 'createdAt'), { ascending: true });
       if (error) throw error;
       return data.map(this.mapToKitchenDM);
     } catch (error) {
@@ -560,7 +559,7 @@ class DatabaseService {
 
   async getKitchenInbox(userId: string): Promise<KitchenDirectMessage[]> {
     try {
-      const { data, error } = await supabase.from('kitchen_chats').select('*').contains('participants', [userId]).order('createdAt', { ascending: false }).limit(100);
+      const { data, error } = await supabase.from('kitchen_chats').select('*').contains('participants', [userId]).order(resolveColumn('kitchen_chats', 'createdAt'), { ascending: false }).limit(100);
       if (error) throw error;
       return data.map(this.mapToKitchenDM);
     } catch (error) {
@@ -581,7 +580,7 @@ class DatabaseService {
   }
 
   async setAddressRegistry(addressId: string, data: any): Promise<void> {
-    const { error } = await supabase.from('address_registry').upsert({ id: addressId, ...data });
+    const { error } = await supabase.from('address_registry').upsert(normalizePayload('address_registry', { id: addressId, ...data }));
     if (error) throw error;
   }
 
@@ -597,7 +596,7 @@ class DatabaseService {
   }
 
   async setHandleRegistry(handleId: string, data: any): Promise<void> {
-    const { error } = await supabase.from('handle_registry').upsert({ id: handleId, ...data });
+    const { error } = await supabase.from('handle_registry').upsert(normalizePayload('handle_registry', { id: handleId, ...data }));
     if (error) throw error;
   }
 
@@ -672,16 +671,20 @@ class DatabaseService {
   }
 
   private mapToFeedPost(data: any): FeedPost {
+    const likes = typeof data.likes === 'string' ? JSON.parse(data.likes) : data.likes || [];
+    const taggedItemIds = Array.isArray(data.taggedItemIds)
+      ? data.taggedItemIds
+      : typeof data.taggedItemIds === 'string'
+        ? (() => { try { return JSON.parse(data.taggedItemIds); } catch { return []; } })()
+        : [];
     return {
       id: data.id,
       kitchenId: data.kitchenId,
       kitchenName: data.kitchenName,
       description: data.description,
       imageUrl: data.imageUrl,
-      likes: typeof data.likes === 'string' ? JSON.parse(data.likes) : data.likes || [],
-      taggedItemId: data.taggedItemId,
-      taggedItemName: data.taggedItemName,
-      taggedItemPrice: data.taggedItemPrice,
+      likes,
+      taggedItemIds,
       createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
       hasAiSparkle: data.hasAiSparkle === true,
       aiSparkleImposed: data.aiSparkleImposed === true

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, MapPin, Sparkles, ShoppingBag, Eye, X, ShieldAlert, MessageCircle } from "lucide-react";
+import { Heart, MapPin, Sparkles, ShoppingBag, X, ShieldAlert, MessageCircle } from "lucide-react";
 import { FeedPost, MenuItem, KitchenDetails } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -52,9 +52,11 @@ export default function FeedPostCard({
   if (!kitchen) return null;
   const isOnline = kitchen.operatingMode === "online";
 
-  // Prevent missing parameters crash by resolving taggedItem strictly
-  const taggedItem = menuItems.find(mi => mi.id === post.taggedItemId);
-  const showTaggedItem = !!(taggedItem && isOnline);
+  // Resolve up to 5 tagged menu items
+  const taggedItems = (post.taggedItemIds || [])
+    .map(id => menuItems.find(mi => mi.id === id))
+    .filter((mi): mi is MenuItem => !!mi && isOnline);
+  const showTaggedItem = taggedItems.length > 0;
   const creatorHandle = kitchen.handle ? `@${kitchen.handle}` : null;
 
   // Debounce click and double-tap gestures to prevent voting race conditions
@@ -81,56 +83,45 @@ export default function FeedPostCard({
         onMouseLeave={() => setIsHovered(false)}
         className="bg-white dark:bg-slate-900 rounded-[24px] border border-gray-100 dark:border-slate-850 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(255,94,58,0.05)] transition-all duration-300 flex flex-col"
       >
-        {/* Header */}
-        <div className="p-4 flex items-center justify-between border-b border-gray-50 dark:border-slate-850">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-primary/10 dark:bg-brand-primary-container overflow-hidden flex items-center justify-center font-bold text-base text-brand-primary shrink-0">
+        {/* Header - Instagram style */}
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-brand-primary/10 dark:bg-brand-primary-container overflow-hidden flex items-center justify-center font-black text-xs text-brand-primary shrink-0 border border-brand-primary/10">
               {kitchen.profileImageUrl ? (
-                <img src={kitchen.profileImageUrl} alt={`${post.kitchenName} profile`} className="w-full h-full object-cover" />
+                <img src={kitchen.profileImageUrl} alt={post.kitchenName} className="w-full h-full object-cover" />
               ) : (
                 "🍳"
               )}
             </div>
             <div>
-              <h3
-                onClick={() => {
-                  onSelectKitchen(post.kitchenId);
-                  onSelectTab("directory");
-                }}
-                className="font-extrabold text-xs text-gray-950 dark:text-slate-100 cursor-pointer hover:text-brand-primary transition-colors flex items-center gap-1"
-              >
-                <span>{post.kitchenName}</span>
-                <span className="text-[10px] text-brand-primary animate-pulse">✨</span>
-              </h3>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-[9px] text-brand-primary font-bold tracking-wider uppercase">Verified Chef</p>
-                  {creatorHandle && (
-                    <p className="text-[9px] text-gray-500 dark:text-slate-400 font-mono">{creatorHandle}</p>
-                  )}
-                </div>
-                {kitchen.deliveryLocations && kitchen.deliveryLocations.length > 0 && (
-                  <p className="text-[9px] text-gray-400 dark:text-slate-400 truncate max-w-[130px]" title={kitchen.deliveryLocations.join(", ")}>
-                    • Delivers to {kitchen.deliveryLocations.map(loc => loc.split(" - ").pop()).join(", ")}
-                  </p>
-                )}
-              </div>
+              <p className="text-xs font-extrabold text-text-primary leading-tight">{post.kitchenName}</p>
+              <p className="text-[9px] text-text-muted font-bold">{post.kitchenId ? post.kitchenId : ""}</p>
             </div>
           </div>
-
-          <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-wider transition-all duration-200 ${
-            isOnline 
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10" 
-              : "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500"
-          }`}>
-            {isOnline ? "Active" : "Offline"}
-          </span>
+          {currentUserRole !== "kitchen" && onToggleFollow && (
+            <button
+              type="button"
+              onClick={() => onToggleFollow(post.kitchenId)}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all ${
+                  isFollowed
+                    ? "bg-brand-primary text-white border-brand-primary"
+                    : "bg-white dark:bg-slate-950 text-brand-primary border-brand-primary/20 hover:border-brand-primary"
+                }`}
+            >
+              {isFollowed ? "Following" : "Follow"}
+            </button>
+          )}
         </div>
 
         {/* Image Frame with Double Tap */}
         <div
           onDoubleClick={handleLikeTrigger}
-          className="relative aspect-video bg-slate-950 overflow-hidden cursor-pointer group"
+          onClick={() => {
+            if (currentUserRole !== "kitchen" && post.imageUrl) {
+              setFullscreenImage(post.imageUrl);
+            }
+          }}
+          className="relative aspect-video bg-slate-950 overflow-hidden cursor-pointer"
         >
           {currentUserRole === "kitchen" ? (
             <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none border border-slate-850">
@@ -144,7 +135,6 @@ export default function FeedPostCard({
             </div>
           ) : (
             <>
-              {/* Stable Skeleton Shimmer block for Cumulative Layout Shift (CLS) protection */}
               {!imageLoaded && (
                 <div className="absolute inset-0 bg-gray-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                   <div className="w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" style={{ backgroundSize: "200% 100%" }} />
@@ -155,7 +145,7 @@ export default function FeedPostCard({
                 alt="Delicious food dish"
                 onLoad={() => setImageLoaded(true)}
                 onError={() => setImageLoaded(true)}
-                className={`w-full h-full object-cover select-none group-hover:scale-[1.03] transition-all duration-700 ease-out ${
+                className={`w-full h-full object-cover select-none transition-all duration-700 ease-out ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
                 referrerPolicy="no-referrer"
@@ -166,22 +156,6 @@ export default function FeedPostCard({
                 </div>
               )}
             </>
-          )}
-
-          {/* Frosted Glass Quick-View Magnifier Button */}
-          {currentUserRole !== "kitchen" && (
-            <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFullscreenImage(post.imageUrl);
-                }}
-                className="px-4 py-2 rounded-full bg-white/20 dark:bg-black/30 backdrop-blur-md border border-white/30 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg hover:bg-white/35 dark:hover:bg-black/45 transition-all scale-95 group-hover:scale-100 duration-300"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Inspect Dish</span>
-              </button>
-            </div>
           )}
 
           {/* Double Tap Heart Burst Animation */}
@@ -207,8 +181,8 @@ export default function FeedPostCard({
             </div>
           )}
 
-          {/* Glassmorphic Shoppable Linked Tag Item (Swiggy / Instagram style overlay) */}
-          {showTaggedItem && (
+          {/* Shoppable Tag - jumping bag only, bottom-left */}
+          {showTaggedItem && currentUserRole !== "kitchen" && (
             <div className="absolute bottom-3 right-3">
               <button
                 disabled={isAdding}
@@ -216,71 +190,49 @@ export default function FeedPostCard({
                   e.stopPropagation();
                   if (isAdding) return;
                   setIsAdding(true);
-                  onAddToCart(taggedItem, post.kitchenId);
+                  taggedItems.forEach(item => onAddToCart(item, post.kitchenId));
                   onSelectTab("cart");
                   setTimeout(() => setIsAdding(false), 800);
                 }}
-                className={`bg-white/10 hover:bg-white/20 dark:bg-black/20 dark:hover:bg-black/35 backdrop-blur-md border border-white/25 dark:border-white/10 text-white rounded-2xl px-4 py-2 text-[10px] font-black flex items-center gap-2 shadow-lg transition-all scale-100 hover:scale-[1.04] ${
+                className={`bg-white/10 hover:bg-white/20 dark:bg-black/20 dark:hover:bg-black/35 backdrop-blur-md border border-white/25 dark:border-white/10 text-white rounded-full p-2.5 shadow-lg transition-all ${
                   isAdding ? "opacity-75 cursor-not-allowed" : ""
                 }`}
               >
-                <ShoppingBag className={`w-3.5 h-3.5 text-brand-primary ${isAdding ? "animate-spin" : "animate-bounce"}`} />
-                <span>
-                  Shop: {taggedItem.name} {currentUserRole === "kitchen" ? "• [Shielded]" : `• ₹${post.taggedItemPrice}`}
-                </span>
+                <ShoppingBag className={`w-4 h-4 text-brand-primary ${isAdding ? "animate-spin" : "animate-bounce"}`} />
               </button>
             </div>
           )}
         </div>
 
-        {/* Footnotes & Likes Counter */}
-        <div className="p-5 space-y-4">
+        {/* Footnotes & Actions - Instagram style */}
+        <div className="px-4 pt-1.5 pb-4 space-y-2.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <motion.button
-                whileTap={{ scale: 0.8 }}
+                whileTap={{ scale: 0.85 }}
                 onClick={handleLikeTrigger}
-                className={`p-1.5 rounded-full cursor-pointer transition-colors ${
-                  isLiked 
-                    ? "text-brand-primary hover:bg-brand-primary/10" 
-                    : "text-gray-400 hover:text-brand-primary hover:bg-brand-primary/5"
-                }`}
+                className="text-text-primary hover:text-rose-500 transition-colors cursor-pointer"
               >
-                <Heart className={`w-5.5 h-5.5 ${isLiked ? "fill-current" : ""}`} />
+                <Heart className={`w-6 h-6 ${isLiked ? "fill-current text-rose-500" : ""}`} />
               </motion.button>
-              <span className="text-[11px] font-extrabold text-gray-900 dark:text-slate-100 tracking-tight">
-                {post.likes.length} resident verifications
-              </span>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button
                 type="button"
                 onClick={() => onOpenComments?.(post.id)}
-                className="px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-800 text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-slate-300 hover:border-brand-primary/40 hover:text-brand-primary transition-all flex items-center gap-1.5"
+                className="text-text-primary hover:text-brand-primary transition-colors cursor-pointer"
               >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>{commentCount} Comments</span>
+                <MessageCircle className="w-6 h-6" />
               </button>
-              {currentUserRole !== "kitchen" && onToggleFollow && (
-                <button
-                  type="button"
-                  onClick={() => onToggleFollow(post.kitchenId)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all ${
-                    isFollowed
-                      ? "bg-brand-primary text-white border-brand-primary"
-                      : "bg-white dark:bg-slate-950 text-brand-primary border-brand-primary/20 hover:border-brand-primary"
-                  }`}
-                >
-                  {isFollowed ? "Following" : "Follow"}
-                </button>
-              )}
             </div>
+            <span className="text-[10px] text-text-muted font-bold">{post.likes?.length || 0} likes</span>
           </div>
 
-          <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed">
-            <span className="font-extrabold text-gray-900 dark:text-slate-100 mr-2">{post.kitchenName}</span>
-            {post.description}
-          </p>
+          {/* Caption */}
+          <div className="space-y-0.5">
+            <p className="text-xs text-text-primary leading-relaxed">
+              <span className="font-extrabold mr-1">{post.kitchenName}</span>
+              {post.description}
+            </p>
+          </div>
 
           {/* Admin Command Deck */}
           {isAdmin && onToggleAiSparkle && (
@@ -306,7 +258,7 @@ export default function FeedPostCard({
         </div>
       </motion.div>
 
-      {/* Hero Fullscreen Inspect Modal */}
+      {/* Instagram-style lightbox */}
       <AnimatePresence>
         {fullscreenImage && currentUserRole !== "kitchen" && (
           <motion.div
@@ -314,22 +266,22 @@ export default function FeedPostCard({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setFullscreenImage(null)}
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 cursor-zoom-out backdrop-blur-md"
+            className="fixed inset-0 bg-black z-50 flex items-center justify-center"
           >
             <button
               onClick={() => setFullscreenImage(null)}
-              className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white cursor-pointer transition-colors"
+              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white cursor-pointer transition-colors z-10"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6" />
             </button>
             <motion.img
-              initial={{ scale: 0.9, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 15 }}
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
               transition={{ type: "spring", damping: 25 }}
               src={fullscreenImage}
-              alt="High-resolution dish inspect"
-              className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+              alt="Full size dish"
+              className="max-w-full max-h-[90vh] object-contain"
               referrerPolicy="no-referrer"
             />
           </motion.div>

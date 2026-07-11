@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { collection, buildQuery, where, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, orderBy, limit, deleteField, doc, db, storage, ref, uploadBytes, getDownloadURL } from "../db";
 import { UserProfile, KitchenDetails, MenuItem, FeedPost, Order, KitchenDirectMessage } from "../types";
-import { Plus, Trash2, Clipboard, Check, Shield, MessageSquare, AlertTriangle, LogOut, Clock, Layers, Star, Settings, Image, CheckCircle, ChevronRight, ArrowLeft, ToggleLeft, ToggleRight, Sun, Moon, Sparkles, Wheat, UserCircle2, Send, Search, UploadCloud, Volume2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Clipboard, Check, Shield, MessageSquare, AlertTriangle, LogOut, Clock, Layers, Star, Settings, Image, CheckCircle, ChevronRight, ArrowLeft, ToggleLeft, ToggleRight, Sun, Moon, Sparkles, Wheat, UserCircle2, Send, Search, UploadCloud, Volume2, X } from "lucide-react";
 import Chat from "./Chat";
 import AIImageShield from "./AIImageShield";
 import { compressImage } from "../utils/imageUtils";
@@ -51,12 +52,14 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   // Post Creator States
   const [postDescription, setPostDescription] = useState("");
-  const [postTaggedItemId, setPostTaggedItemId] = useState("");
+  const [postTaggedItemIds, setPostTaggedItemIds] = useState<string[]>([]);
   const [postImageFile, setPostImageFile] = useState<File | null>(null);
   const [postImageBase64, setPostImageBase64] = useState<string | null>(null);
   const [isScanningImage, setIsScanningImage] = useState(false);
   const [imageApproved, setImageApproved] = useState(false);
   const [hasAiSparkle, setHasAiSparkle] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   // Delivery Pin state
   const [enteredPin, setEnteredPin] = useState("");
@@ -646,7 +649,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
     if (!postImageBase64 || !imageApproved) return;
 
-    const taggedItem = myItems.find(mi => mi.id === postTaggedItemId);
+    const taggedItems = myItems.filter(mi => postTaggedItemIds.includes(mi.id));
 
     const customPostId = "post_" + Date.now();
     try {
@@ -657,9 +660,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         description: postDescription.trim(),
         imageUrl: postImageBase64,
         likes: [],
-        taggedItemId: taggedItem ? taggedItem.id : null,
-        taggedItemName: taggedItem ? taggedItem.name : null,
-        taggedItemPrice: taggedItem ? taggedItem.price : null,
+        taggedItemIds: taggedItems.map(mi => mi.id),
         createdAt: new Date().toISOString(),
         hasAiSparkle: hasAiSparkle,
         aiSparkleImposed: false
@@ -667,7 +668,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
       // Clear states
       setPostDescription("");
-      setPostTaggedItemId("");
+      setPostTaggedItemIds([]);
       setPostImageFile(null);
       setPostImageBase64(null);
       setImageApproved(false);
@@ -691,6 +692,54 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
       }
     } catch (err) {
       console.error("Failed to delete post:", err);
+    }
+  };
+
+  const handleStartEditPost = (post: FeedPost) => {
+    setEditingPostId(post.id);
+    setPostDescription(post.description);
+    setPostTaggedItemIds(post.taggedItemIds || []);
+    setPostImageBase64(post.imageUrl);
+    setHasAiSparkle(post.hasAiSparkle || false);
+    setImageApproved(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPostId(null);
+    setPostDescription("");
+    setPostTaggedItemIds([]);
+    setPostImageBase64(null);
+    setImageApproved(false);
+    setHasAiSparkle(false);
+    setPostImageFile(null);
+  };
+
+  const handleUpdateFeedPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPostId || !requestKitchenPin("Save changes to this post?")) return;
+    if (!postImageBase64 || !imageApproved) return;
+
+    const taggedItems = myItems.filter(mi => postTaggedItemIds.includes(mi.id));
+    try {
+      const q = buildQuery(collection(db, "feed_posts"), where("id", "==", editingPostId));
+      const snap = await getDocs(q);
+      const docId = snap.docs[0]?.id;
+      if (!docId) {
+        showToast("Post not found.");
+        return;
+      }
+      await updateDoc(doc(db, "feed_posts", docId), {
+        description: postDescription.trim(),
+        imageUrl: postImageBase64,
+        taggedItemIds: taggedItems.map(mi => mi.id),
+        hasAiSparkle: hasAiSparkle,
+      });
+      showToast("Post updated successfully! ✨");
+      handleCancelEdit();
+    } catch (err) {
+      console.error("Failed to update post:", err);
+      showToast("Failed to update post.");
     }
   };
 
@@ -1502,11 +1551,18 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
             </div>
 
             {/* Publisher Form */}
-            <form onSubmit={handlePublishFeedPost} className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4">
-              <h3 className="text-xs font-extrabold text-text-muted uppercase tracking-widest flex items-center gap-1.5">
-                <Image className="w-4 h-4 text-brand-primary" />
-                <span>Publish Social Post</span>
-              </h3>
+            <form onSubmit={editingPostId ? handleUpdateFeedPost : handlePublishFeedPost} className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold text-text-muted uppercase tracking-widest flex items-center gap-1.5">
+                  <Image className="w-4 h-4 text-brand-primary" />
+                  <span>{editingPostId ? "Editing Post" : "Publish Social Post"}</span>
+                </h3>
+                {editingPostId && (
+                  <button type="button" onClick={handleCancelEdit} className="text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-text-primary px-2.5 py-1 rounded-lg border border-border-primary hover:border-brand-primary/40 transition-all cursor-pointer">
+                    Cancel
+                  </button>
+                )}
+              </div>
 
               {/* File input */}
               <div className="space-y-1">
@@ -1542,22 +1598,38 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                 </div>
               )}
 
-              {/* Tag Menu Dish */}
+              {/* Tag Menu Dishes */}
               <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-text-muted uppercase">Tag Shoppable Dish (Required)</label>
-                <select
-                  required
-                  value={postTaggedItemId}
-                  onChange={(e) => setPostTaggedItemId(e.target.value)}
-                  className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg text-xs font-medium focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
-                >
-                  <option value="">-- Choose dish to link --</option>
-                  {myItems.map((mi) => (
-                    <option key={mi.id} value={mi.id}>{mi.name} • ₹{mi.price}</option>
-                  ))}
-                </select>
+                <label className="text-[10px] font-semibold text-text-muted uppercase">Tag Shoppable Dishes (max 5)</label>
+                <div className="border border-border-primary rounded-xl p-3 bg-background-primary max-h-[140px] overflow-y-auto space-y-1.5">
+                  {myItems.length === 0 ? (
+                    <p className="text-[10px] text-text-muted italic">No menu items yet. Add dishes in the Menu Builder first.</p>
+                  ) : (
+                    myItems.map((mi) => {
+                      const checked = postTaggedItemIds.includes(mi.id);
+                      const disabled = !checked && postTaggedItemIds.length >= 5;
+                      return (
+                        <label key={mi.id} className={`flex items-center gap-2 text-xs cursor-pointer ${disabled ? "opacity-40" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => {
+                              setPostTaggedItemIds(prev =>
+                                checked ? prev.filter(id => id !== mi.id) : [...prev, mi.id]
+                              );
+                            }}
+                            className="w-3.5 h-3.5 rounded border-border-primary text-brand-primary focus:ring-brand-primary cursor-pointer"
+                          />
+                          <span className="font-medium text-text-primary">{mi.name}</span>
+                          <span className="text-[10px] text-text-muted font-mono">₹{mi.price}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
                 <p className="text-[10px] text-text-muted">
-                  Tapping this post on the Discover Feed will instantly add this tagged item to the customer's cart.
+                  {postTaggedItemIds.length}/5 selected. Tapping the post on the Discover Feed will add all tagged items to the cart.
                 </p>
               </div>
 
@@ -1604,39 +1676,88 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
             </form>
 
             {/* List of my published posts */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest pl-2">My Social Posts ({myPosts.length})</h3>
               {myPosts.length === 0 ? (
-                <p className="text-xs text-text-muted italic text-center py-4 font-semibold">No published posts.</p>
+                <p className="text-xs text-text-muted italic text-center py-4 font-semibold">No published posts yet. Share your first dish above!</p>
               ) : (
                 myPosts.map((post) => (
-                  <div key={post.id} className="p-4 bg-background-secondary border border-border-primary rounded-3xl flex justify-between items-start gap-4 shadow-theme animate-fade-in">
-                    <img
-                      src={post.imageUrl}
-                      alt="Published Dish"
-                      className="w-16 h-16 object-cover rounded-xl border border-border-primary bg-background-primary shrink-0"
-                    />
-
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <p className="text-xs text-text-secondary leading-snug line-clamp-2 font-bold">"{post.description}"</p>
-                      {post.taggedItemName && (
-                        <span className="inline-block px-2.5 py-0.5 bg-brand-primary-container border border-brand-primary/20 text-brand-primary font-black text-[9px] uppercase rounded-md">
-                          [@] Tagged: {post.taggedItemName}
-                        </span>
-                      )}
-                      <p className="text-[10px] text-text-muted font-bold">{post.likes.length} verification likes</p>
+                  <article key={post.id} className="bg-background-secondary border border-border-primary rounded-3xl overflow-hidden shadow-theme animate-fade-in">
+                    {/* Instagram-style header */}
+                    <div className="flex items-center justify-between p-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-primary/10 dark:bg-brand-primary-container flex items-center justify-center font-black text-[10px] text-brand-primary border border-brand-primary/10 shrink-0">
+                          {kitchenDetails?.kitchenName?.[0] || currentProfile.displayName?.[0] || "K"}
+                        </div>
+                        <div>
+                          <p className="text-xs font-extrabold text-text-primary leading-tight">{kitchenDetails?.kitchenName || currentProfile.displayName}</p>
+                          <p className="text-[9px] text-text-muted font-bold">{new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => handleStartEditPost(post)} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all cursor-pointer" title="Edit post">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeletePost(post.id)} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-all cursor-pointer" title="Delete post">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDeletePost(post.id)}
-                      className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-all cursor-pointer shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                    {/* Instagram-style square-ish image */}
+                    <div className="aspect-square bg-background-primary cursor-pointer" onClick={() => setFullscreenImage(post.imageUrl)}>
+                      <img src={post.imageUrl} alt={post.description} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+
+                    {/* Instagram-style actions + caption */}
+                    <div className="p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-extrabold text-text-primary flex items-center gap-1">❤️ {post.likes?.length || 0}</span>
+                          {post.taggedItemIds?.length > 0 && (
+                            <span className="text-[10px] text-text-muted font-bold">{post.taggedItemIds.length} tagged</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        <span className="font-extrabold text-text-primary mr-1">{kitchenDetails?.kitchenName || currentProfile.displayName}</span>
+                        {post.description}
+                      </p>
+                    </div>
+                  </article>
                 ))
               )}
             </div>
+
+            {/* Kitchen lightbox */}
+            <AnimatePresence>
+              {fullscreenImage && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setFullscreenImage(null)}
+                  className="fixed inset-0 bg-black z-50 flex items-center justify-center"
+                >
+                  <button
+                    onClick={() => setFullscreenImage(null)}
+                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white cursor-pointer transition-colors z-10"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <motion.img
+                    initial={{ scale: 0.95 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0.95 }}
+                    transition={{ type: "spring", damping: 25 }}
+                    src={fullscreenImage}
+                    alt="Full size dish"
+                    className="max-w-full max-h-[90vh] object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 

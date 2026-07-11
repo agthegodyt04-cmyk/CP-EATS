@@ -47,6 +47,71 @@ export function buildQuery(collectionRef: any, ...constraints: any[]) {
   return q;
 }
 
+const COLUMN_ALIASES: Record<string, Partial<Record<string, string>>> = {
+  favorites: { userId: 'userid', menuItemId: 'menuitemid', kitchenId: 'kitchenid' },
+  notifications: { userId: 'userid' },
+  follows: { followerId: 'followerid', kitchenId: 'kitchenid' },
+  comments: { postId: 'postid', userId: 'userid', userName: 'username', userRole: 'userrole', kitchenId: 'kitchenid' },
+  reviews: { orderId: 'orderid', customerId: 'customerid', customerName: 'customername', kitchenId: 'kitchenid', isHandpicked: 'ishandpicked', taggedItemIds: 'taggeditemids' },
+  chats: { orderId: 'orderid', senderId: 'senderid', senderName: 'sendername', isUpiCard: 'isupicard', qrCodeUrl: 'qrcodeurl' },
+  kitchen_chats: { conversationId: 'conversationid', senderId: 'senderid', senderName: 'sendername', senderHandle: 'senderhandle', recipientId: 'recipientid', recipientName: 'recipientname', recipientHandle: 'recipienthandle' },
+  address_registry: { flatAddress: 'flataddress' },
+  users: { createdAt: 'created_at' },
+};
+
+export function resolveColumn(table: string, column: string): string {
+  if (column === 'id') return column;
+  return COLUMN_ALIASES[table]?.[column] || column;
+}
+
+const TABLE_SPECIFIC_ALIASES: Record<string, Partial<Record<string, string>>> = {
+  ...COLUMN_ALIASES,
+  feed_posts: { kitchenId: 'kitchenid', kitchenName: 'kitchenname', createdAt: 'createdat', hasAiSparkle: 'hasaisparkle', aiSparkleImposed: 'aisparkleimposed', taggedItemIds: 'taggeditemids' },
+  orders: { customerId: 'customerid', customerName: 'customername', customerPhone: 'customerphone', customerAddress: 'customeraddress', kitchenId: 'kitchenid', kitchenName: 'kitchenname', subtotal: 'subtotal', total: 'total', deliveryType: 'deliverytype', deliveryPin: 'deliverypin', createdAt: 'createdat', scheduledTime: 'scheduledtime' },
+  kitchens: { kitchenId: 'kitchenid', kitchenName: 'kitchenname', profileImageUrl: 'profileimageurl', ringtoneMode: 'ringtonemode', ringtoneChoice: 'ringtonechoice', ringtoneUrl: 'ringtoneurl', vegType: 'vegtype', isOnline: 'isonline', restingUntil: 'restinguntil', operatingMode: 'operatingmode', deliveryLocations: 'deliverylocations', customCategories: 'customcategories' },
+  menu_items: { kitchenId: 'kitchenid', imageUrl: 'imageurl', isGlutenFree: 'isglutenfree', isNutFree: 'isnutfree', isAvailable: 'isavailable', postId: 'postid' },
+  comments: { postId: 'postid', userId: 'userid', userName: 'username', userRole: 'userrole', kitchenId: 'kitchenid', createdAt: 'createdat' },
+  reviews: { orderId: 'orderid', customerId: 'customerid', customerName: 'customername', kitchenId: 'kitchenid', isHandpicked: 'ishandpicked', taggedItemIds: 'taggeditemids', createdAt: 'createdat' },
+  chats: { orderId: 'orderid', senderId: 'senderid', senderName: 'sendername', isUpiCard: 'isupicard', qrCodeUrl: 'qrcodeurl', createdAt: 'createdat' },
+  kitchen_chats: { conversationId: 'conversationid', senderId: 'senderid', senderName: 'sendername', senderHandle: 'senderhandle', recipientId: 'recipientid', recipientName: 'recipientname', recipientHandle: 'recipienthandle', createdAt: 'createdat' },
+  notifications: { userId: 'userid', createdAt: 'createdat' },
+  favorites: { userId: 'userid', menuItemId: 'menuitemid', kitchenId: 'kitchenid', createdAt: 'createdat' },
+  follows: { followerId: 'followerid', kitchenId: 'kitchenid', createdAt: 'createdat' },
+};
+
+export { TABLE_SPECIFIC_ALIASES };
+
+const REVERSE_ALIASES: Record<string, Record<string, string>> = {};
+for (const [table, aliases] of Object.entries(TABLE_SPECIFIC_ALIASES)) {
+  REVERSE_ALIASES[table] = {};
+  for (const [camel, snake] of Object.entries(aliases)) {
+    REVERSE_ALIASES[table][snake] = camel;
+  }
+}
+
+export function denormalizeRow(table: string, row: any): any {
+  if (!row || typeof row !== 'object') return row;
+  const aliases = REVERSE_ALIASES[table] || {};
+  const result: any = {};
+  for (const [key, value] of Object.entries(row)) {
+    const normalized = aliases[key] || key;
+    result[normalized] = value;
+  }
+  return result;
+}
+
+export function normalizePayload(table: string, data: any): any {
+  if (!data || typeof data !== 'object') return data;
+  if (Array.isArray(data)) return data.map(item => normalizePayload(table, item));
+  const result: any = {};
+  const aliases = TABLE_SPECIFIC_ALIASES[table] || {};
+  for (const [key, value] of Object.entries(data)) {
+    const normalized = aliases[key] || key;
+    result[normalized] = value;
+  }
+  return result;
+}
+
 async function applyConstraints(table: string, constraints: any[]): Promise<any> {
   let q: any = supabase.from(table).select('*');
   let orderField: string | null = null;
@@ -55,12 +120,13 @@ async function applyConstraints(table: string, constraints: any[]): Promise<any>
 
   for (const c of constraints) {
     if (c.type === 'where') {
-      if (c.op === '==') q = q.eq(c.field, c.value);
-      else if (c.op === 'array-contains') q = q.contains(c.field, [c.value]);
-      else if (c.op === '!=') q = q.neq(c.field, c.value);
-      else q = q.eq(c.field, c.value);
+      const field = resolveColumn(table, c.field);
+      if (c.op === '==') q = q.eq(field, c.value);
+      else if (c.op === 'array-contains') q = q.contains(field, [c.value]);
+      else if (c.op === '!=') q = q.neq(field, c.value);
+      else q = q.eq(field, c.value);
     } else if (c.type === 'orderBy') {
-      orderField = c.field;
+      orderField = resolveColumn(table, c.field);
       orderAsc = c.ascending !== false;
     } else if (c.type === 'limit') {
       limitCount = c.n;
@@ -78,10 +144,11 @@ export async function getDoc(ref: any): Promise<{ exists: () => boolean; data: (
   const id = ref.id;
   const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
   if (error || !data) return null;
+  const normalized = denormalizeRow(table, data);
   return {
     exists: () => true,
-    data: () => data,
-    id: data.id
+    data: () => normalized,
+    id: normalized.id
   };
 }
 
@@ -90,11 +157,14 @@ export async function getDocs(q: any): Promise<{ docs: any[]; empty: boolean; fo
   const queryBuilder = await applyConstraints(table, q.constraints || []);
   const { data, error } = await queryBuilder;
   if (error) return { docs: [], empty: true, forEach: () => {} };
-  const docs = (data || []).map((row: any) => ({
-    id: row.id,
-    data: () => row,
-    ref: () => doc(null, table, row.id)
-  }));
+  const docs = (data || []).map((row: any) => {
+    const normalized = denormalizeRow(table, row);
+    return {
+      id: normalized.id,
+      data: () => normalized,
+      ref: () => doc(null, table, normalized.id)
+    };
+  });
   return {
     docs,
     empty: docs.length === 0,
@@ -105,7 +175,7 @@ export async function getDocs(q: any): Promise<{ docs: any[]; empty: boolean; fo
 export async function setDoc(ref: any, data: any): Promise<void> {
   const table = ref.table;
   const id = ref.id || data.id;
-  const payload = { ...data, id };
+  const payload = normalizePayload(table, { ...data, id });
   const { error } = await supabase.from(table).upsert(payload);
   if (error) throw error;
   notify(table);
@@ -121,7 +191,7 @@ export async function updateDoc(ref: any, data: any): Promise<void> {
     }
     cleaned[key] = value;
   }
-  const { error } = await supabase.from(table).update(cleaned).eq('id', id);
+  const { error } = await supabase.from(table).update(normalizePayload(table, cleaned)).eq('id', id);
   if (error) throw error;
   notify(table);
 }
@@ -182,12 +252,12 @@ export function writeBatch(_db: any) {
 export const db = {
   from: (table: string) => ({
     select: (cols?: string) => supabase.from(table).select(cols || '*'),
-    insert: (rows: any[]) => supabase.from(table).insert(rows),
+    insert: (rows: any[]) => supabase.from(table).insert(normalizePayload(table, rows)),
     update: (data: any) => ({
-      eq: (field: string, value: any) => supabase.from(table).update(data).eq(field, value)
+      eq: (field: string, value: any) => supabase.from(table).update(normalizePayload(table, data)).eq(resolveColumn(table, field), value)
     }),
     delete: () => ({
-      eq: (field: string, value: any) => supabase.from(table).delete().eq(field, value)
+      eq: (field: string, value: any) => supabase.from(table).delete().eq(resolveColumn(table, field), value)
     })
   })
 };

@@ -51,6 +51,18 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
   // Visual state
   const [likedPosts, setLikedPosts] = useState<{ [postId: string]: boolean }>({});
   const [doubleTappedPostId, setDoubleTappedPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLikedPosts(prev => {
+      const next = { ...prev };
+      for (const post of feedPosts) {
+        if (post.id && !(post.id in next)) {
+          next[post.id] = Array.isArray(post.likes) && post.likes.includes(currentProfile.uid);
+        }
+      }
+      return next;
+    });
+  }, [feedPosts, currentProfile.uid]);
   const [toastMessage, setToastMessage] = useState("");
   const [showReviewOrderId, setShowReviewOrderId] = useState<string | null>(null);
 
@@ -281,18 +293,28 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
 
   // Fetch initial data
   useEffect(() => {
+    const toMillis = (value: unknown): number => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value) {
+        const parsed = Date.parse(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+
     // 1. Fetch kitchens and associate their societies and flat addresses from user profiles
+    // Supabase rows use `id`; app types use `uid`. Normalize both so directory/feed matching works.
     const qKitchenProfiles = buildQuery(collection(db, "users"), where("role", "==", "kitchen"), where("status", "==", "verified"));
     let unsubDetails: (() => void) | null = null;
     const unsubKitchens = onSnapshot(qKitchenProfiles, (pSnap) => {
       const societiesMap: Record<string, string> = {};
       const flatAddressMap: Record<string, string> = {};
-      pSnap.forEach(doc => {
-        const d = doc.data();
-        if (d.uid) {
-          if (d.society) societiesMap[d.uid] = d.society;
-          if (d.flatAddress) flatAddressMap[d.uid] = d.flatAddress;
-        }
+      pSnap.forEach((profileDoc) => {
+        const d = profileDoc.data() as Record<string, any>;
+        const profileId = d.uid || d.id || profileDoc.id;
+        if (!profileId) return;
+        if (d.society) societiesMap[profileId] = d.society;
+        if (d.flatAddress) flatAddressMap[profileId] = d.flatAddress;
       });
 
       if (unsubDetails) {
@@ -301,12 +323,27 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       
       unsubDetails = onSnapshot(collection(db, "kitchens"), (kSnap) => {
         const list: KitchenDetails[] = [];
-        kSnap.forEach(doc => {
-          const kData = doc.data() as KitchenDetails;
+        kSnap.forEach((kitchenDoc) => {
+          const kData = kitchenDoc.data() as Record<string, any>;
+          const kitchenUid = kData.uid || kData.id || kitchenDoc.id;
+          if (!kitchenUid) return;
           list.push({
-            ...kData,
-            society: societiesMap[kData.uid] || "",
-            flatAddress: flatAddressMap[kData.uid] || ""
+            ...(kData as KitchenDetails),
+            uid: kitchenUid,
+            // Prefer kitchen row society (set at onboarding); fall back to linked user profile
+            society: kData.society || societiesMap[kitchenUid] || "",
+            flatAddress: kData.flatAddress || flatAddressMap[kitchenUid] || "",
+            deliveryLocations: Array.isArray(kData.deliveryLocations)
+              ? kData.deliveryLocations
+              : (typeof kData.deliveryLocations === "string"
+                  ? (() => { try { return JSON.parse(kData.deliveryLocations); } catch { return []; } })()
+                  : []),
+            customCategories: Array.isArray(kData.customCategories) ? kData.customCategories : [],
+            vegType: kData.vegType || "veg",
+            mov: typeof kData.mov === "number" ? kData.mov : 100,
+            isOnline: kData.isOnline !== false,
+            operatingMode: kData.operatingMode || "online",
+            kitchenName: kData.kitchenName || "Home Kitchen",
           });
         });
         setKitchens(list);
@@ -316,27 +353,67 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
     // 2. Fetch menu items
     const unsubMenu = onSnapshot(collection(db, "menu_items"), (snap) => {
       const list: MenuItem[] = [];
-      snap.forEach(doc => list.push({ id: doc.id, ...doc.data() } as MenuItem));
+      snap.forEach((itemDoc) => {
+        const data = itemDoc.data() as Record<string, any>;
+        list.push({
+          id: data.id || itemDoc.id,
+          ...data,
+          createdAt: toMillis(data.createdAt),
+        } as MenuItem);
+      });
       setMenuItems(list);
     });
 
     // 3. Fetch Feed posts
     const unsubFeed = onSnapshot(collection(db, "feed_posts"), (snap) => {
       const list: FeedPost[] = [];
-      snap.forEach(doc => list.push({ id: doc.id, ...doc.data() } as FeedPost));
+      snap.forEach((postDoc) => {
+        const data = postDoc.data() as Record<string, any>;
+        const likes = Array.isArray(data.likes)
+          ? data.likes
+          : (typeof data.likes === "string"
+              ? (() => { try { return JSON.parse(data.likes); } catch { return []; } })()
+              : []);
+        list.push({
+          ...(data as FeedPost),
+          id: data.id || postDoc.id,
+          kitchenId: data.kitchenId || "",
+          kitchenName: data.kitchenName || "Kitchen",
+          description: data.description || "",
+          imageUrl: data.imageUrl || "",
+          likes,
+          createdAt: toMillis(data.createdAt),
+          hasAiSparkle: data.hasAiSparkle === true,
+          aiSparkleImposed: data.aiSparkleImposed === true,
+        });
+      });
       // Sort fresh posts first
       list.sort((a, b) => b.createdAt - a.createdAt);
       setFeedPosts(list);
     });
 
+
     // 4. Fetch customer orders
     const qOrders = buildQuery(collection(db, "orders"), where("customerId", "==", currentProfile.uid));
     const unsubOrders = onSnapshot(qOrders, (snap) => {
       const list: Order[] = [];
-      snap.forEach(doc => list.push({ id: doc.id, ...doc.data() } as Order));
+      snap.forEach((orderDoc) => {
+        const data = orderDoc.data() as Record<string, any>;
+        list.push({
+          ...(data as Order),
+          id: data.id || orderDoc.id,
+          createdAt: toMillis(data.createdAt),
+          items: Array.isArray(data.items)
+            ? data.items
+            : (typeof data.items === "string"
+                ? (() => { try { return JSON.parse(data.items); } catch { return []; } })()
+                : []),
+        });
+      });
       list.sort((a, b) => b.createdAt - a.createdAt);
       setOrders(list);
     });
+
 
     // 5. Fetch reviews
     const unsubReviews = onSnapshot(collection(db, "reviews"), (snap) => {
@@ -415,7 +492,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
     setTimeout(() => setToastMessage(""), 2500);
   };
 
-  // Double tap post to Like
+  // Double tap post to Like (optimistic UI for immediate feedback)
   const handleDoubleTapPost = async (postId: string) => {
     setDoubleTappedPostId(postId);
     setTimeout(() => setDoubleTappedPostId(null), 800);
@@ -423,7 +500,8 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
     const post = feedPosts.find(p => p.id === postId);
     if (!post) return;
 
-    let updatedLikes = [...post.likes];
+    const previousLikes = Array.isArray(post.likes) ? [...post.likes] : [];
+    let updatedLikes = [...previousLikes];
     if (updatedLikes.includes(currentProfile.uid)) {
       // Unlike
       updatedLikes = updatedLikes.filter(id => id !== currentProfile.uid);
@@ -434,12 +512,19 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       setLikedPosts(prev => ({ ...prev, [postId]: true }));
     }
 
+    // Optimistic local update so heart fills immediately
+    setFeedPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: updatedLikes } : p));
+
     try {
       await updateDoc(doc(db, "feed_posts", postId), { likes: updatedLikes });
     } catch (err) {
       console.error("Failed to update post likes:", err);
+      // Roll back on failure
+      setFeedPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: previousLikes } : p));
+      setLikedPosts(prev => ({ ...prev, [postId]: previousLikes.includes(currentProfile.uid) }));
     }
   };
+
 
   // Admin toggle AI Sparkle Tag
   const handleToggleAiSparkle = async (postId: string, currentStatus: boolean) => {
@@ -458,10 +543,28 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
   const toggleFollowKitchen = async (kitchenId: string) => {
     const followId = `follow_${currentProfile.uid}_${kitchenId}`;
     const alreadyFollowing = follows.some(f => f.kitchenId === kitchenId);
+    const previousFollows = follows;
+
+    // Optimistic follow/unfollow for immediate button feedback
+    if (alreadyFollowing) {
+      setFollows(prev => prev.filter(f => f.kitchenId !== kitchenId));
+      showToast("Unfollowed kitchen.");
+    } else {
+      setFollows(prev => [
+        ...prev,
+        {
+          id: followId,
+          followerId: currentProfile.uid,
+          kitchenId,
+          createdAt: Date.now(),
+        },
+      ]);
+      showToast("Following kitchen.");
+    }
+
     try {
       if (alreadyFollowing) {
         await deleteDoc(doc(db, "follows", followId));
-        showToast("Unfollowed kitchen.");
       } else {
         await setDoc(doc(db, "follows", followId), {
           id: followId,
@@ -469,13 +572,14 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           kitchenId,
           createdAt: new Date().toISOString()
         });
-        showToast("Following kitchen.");
       }
     } catch (err) {
       console.error("Failed to toggle follow:", err);
+      setFollows(previousFollows);
       showToast("Failed to update follow state.");
     }
   };
+
 
   const openCommentsForPost = (postId: string) => {
     setSelectedCommentPostId(postId);
@@ -502,17 +606,28 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
         id: commentId,
         postId: selectedCommentPostId,
         userId: currentProfile.uid,
-        userName: currentProfile.displayName,
+        userName: currentProfile.displayName || "User",
         userRole: currentProfile.role,
         text,
-          createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         kitchenId: post.kitchenId
       });
+      setComments(prev => [...prev, {
+        id: commentId,
+        postId: selectedCommentPostId,
+        userId: currentProfile.uid,
+        userName: currentProfile.displayName || "User",
+        userRole: currentProfile.role,
+        text,
+        createdAt: new Date().toISOString(),
+        kitchenId: post.kitchenId
+      }]);
       setCommentDraft("");
       showToast("Comment posted.");
     } catch (err) {
       console.error("Failed to post comment:", err);
-      showToast("Failed to post comment.");
+      const msg = err instanceof Error ? err.message : "Failed to post comment.";
+      showToast(msg);
     }
   };
 
@@ -610,9 +725,9 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
 
     const orderData = {
       customerId: currentProfile.uid,
-      customerName: currentProfile.displayName,
-      customerPhone: currentProfile.phone,
-      customerAddress: currentProfile.flatAddress,
+      customerName: currentProfile.displayName || "Customer",
+      customerPhone: currentProfile.phone || "",
+      customerAddress: currentProfile.flatAddress || "",
       kitchenId,
       kitchenName: kitchen.kitchenName,
       items: cartList.map(entry => ({
@@ -670,17 +785,42 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
     .map((post) => {
       const kitchen = kitchens.find(k => k.uid === post.kitchenId);
       const followBoost = followKitchenIds.has(post.kitchenId) ? 1000000000 : 0;
-      return { post, kitchen, score: followBoost + post.createdAt };
+      const createdAtMs = typeof post.createdAt === "number" ? post.createdAt : 0;
+      return { post, kitchen, score: followBoost + createdAtMs };
     })
     .filter(({ kitchen }) => {
       if (!kitchen) return false;
-      if (kitchen.society !== currentProfile.society) return false;
+      // Show posts from same society OR kitchens that deliver to the customer
+      const sameSociety = (kitchen.society || "") === (currentProfile.society || "");
+      const deliversHere = checkKitchenDelivers(kitchen);
+      if (!sameSociety && !deliversHere) return false;
       if (vegFilter === "veg" && kitchen.vegType !== "veg") return false;
       if (vegFilter === "non-veg" && kitchen.vegType === "veg") return false;
       return true;
     })
     .sort((a, b) => b.score - a.score);
+
+  const visibleDirectoryKitchens = kitchens.filter((kitchen) => {
+    if (!kitchen) return false;
+    const deliversToCustomer = checkKitchenDelivers(kitchen);
+    const kitchenSociety = kitchen.society || "";
+    const matchSociety = kitchenSociety === currentProfile.society || deliversToCustomer;
+
+    const kitchenName = kitchen.kitchenName || "";
+    const cuisineType = kitchen.cuisineType || "";
+    const matchSearch = kitchenName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        cuisineType.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const vegType = kitchen.vegType || "both";
+    const matchVeg = vegFilter === "all" ? true :
+                     vegFilter === "veg" ? vegType === "veg" :
+                     (vegType === "non-veg" || vegType === "both");
+
+    return matchSociety && matchSearch && matchVeg;
+  });
+
   const activeComments = comments.filter(c => c.postId === selectedCommentPostId);
+
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-100 pb-20 transition-colors duration-200">
@@ -847,11 +987,18 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
                 <p className="text-sm font-bold text-text-primary">No food feed posts yet</p>
                 <p className="text-xs text-text-muted mt-1 font-semibold">Check back later for fresh homemade updates!</p>
               </div>
+            ) : visibleFeedPosts.length === 0 ? (
+              <div className="text-center py-12 bg-background-secondary rounded-3xl border border-border-primary shadow-theme">
+                <Coffee className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                <p className="text-sm font-bold text-text-primary">No posts match your filters</p>
+                <p className="text-xs text-text-muted mt-1 font-semibold">
+                  Try switching veg filter to All, or check kitchens that deliver to your block.
+                </p>
+              </div>
             ) : (
               visibleFeedPosts.map(({ post, kitchen }) => {
                 if (!kitchen) return null;
-                const isOnline = kitchen.operatingMode ? kitchen.operatingMode === "online" : kitchen?.isOnline;
-                const isLiked = post.likes.includes(currentProfile.uid) || likedPosts[post.id];
+                const isLiked = (Array.isArray(post.likes) && post.likes.includes(currentProfile.uid)) || likedPosts[post.id];
                 const commentCount = comments.filter(c => c.postId === post.id).length;
 
                 return (
@@ -859,7 +1006,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
                     key={post.id}
                     post={post}
                     currentUserId={currentProfile.uid}
-                    isLiked={isLiked}
+                    isLiked={!!isLiked}
                     kitchen={kitchen}
                     menuItems={menuItems}
                     doubleTappedPostId={doubleTappedPostId}
@@ -878,6 +1025,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
                 );
               })
             )}
+
           </div>
         )}
 
@@ -922,26 +1070,24 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
 
             {/* List */}
             <div className="space-y-4">
-              {kitchens
-                .filter((kitchen) => {
-                  if (!kitchen) return false;
-                  const deliversToCustomer = checkKitchenDelivers(kitchen);
-                  const kitchenSociety = kitchen.society || "";
-                  const matchSociety = kitchenSociety === currentProfile.society || deliversToCustomer;
-                  
-                  const kitchenName = kitchen.kitchenName || "";
-                  const cuisineType = kitchen.cuisineType || "";
-                  const matchSearch = kitchenName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                      cuisineType.toLowerCase().includes(searchQuery.toLowerCase());
-                  
-                  const vegType = kitchen.vegType || "both";
-                  const matchVeg = vegFilter === "all" ? true : 
-                                   vegFilter === "veg" ? vegType === "veg" : 
-                                   (vegType === "non-veg" || vegType === "both");
-                  
-                  return matchSociety && matchSearch && matchVeg;
-                })
+              {kitchens.length === 0 ? (
+                <div className="text-center py-12 bg-background-secondary rounded-3xl border border-border-primary shadow-theme">
+                  <Coffee className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-text-primary">No kitchens listed yet</p>
+                  <p className="text-xs text-text-muted mt-1 font-semibold">Verified home kitchens will appear here once they join CP-Eats.</p>
+                </div>
+              ) : visibleDirectoryKitchens.length === 0 ? (
+                <div className="text-center py-12 bg-background-secondary rounded-3xl border border-border-primary shadow-theme">
+                  <Coffee className="w-12 h-12 text-text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-text-primary">No kitchens match your filters</p>
+                  <p className="text-xs text-text-muted mt-1 font-semibold">
+                    Try clearing search or switching veg filter. Society: {currentProfile.society || "not set"}
+                  </p>
+                </div>
+              ) : null}
+              {visibleDirectoryKitchens
                 .map((kitchen) => {
+
                   if (!kitchen) return null;
                   const isOnline = kitchen.operatingMode ? kitchen.operatingMode === "online" : kitchen.isOnline;
                   const deliversToCustomer = checkKitchenDelivers(kitchen);

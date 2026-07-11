@@ -75,9 +75,7 @@ async function initializeDatabase() {
       description TEXT DEFAULT '',
       imageUrl TEXT DEFAULT '',
       likes TEXT DEFAULT '[]',
-      taggedItemId TEXT,
-      taggedItemName TEXT,
-      taggedItemPrice REAL,
+      taggedItemIds TEXT DEFAULT '[]',
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       hasAiSparkle INTEGER DEFAULT 0,
       aiSparkleImposed INTEGER DEFAULT 0

@@ -236,9 +236,7 @@ export async function seedInitialData() {
         description: "Simmering a fresh batch of Butter Paneer for tonight's dinner! The kitchen smells absolutely divine. Pair it with our hand-stretched hot butter rotis. Order cutoff at 7:00 PM!",
         imageUrl: PANEER_MASALA_SVG,
         likes: ["demo_user_1", "demo_user_2"],
-        taggedItemId: "menu_p1",
-        taggedItemName: "Paneer Butter Masala",
-        taggedItemPrice: 180,
+        taggedItemIds: ["menu_p1"],
         createdAt: Date.now() - 3600000 // 1 hour ago
       },
       {
@@ -248,9 +246,7 @@ export async function seedInitialData() {
         description: "Sundays are meant for Podi Dosa! Freshly ground gun powder podi, roasted on heavy cast iron with organic cold-pressed ghee. Crispy, golden, and pure comfort. Available till 11:30 AM only!",
         imageUrl: DOSA_SVG,
         likes: ["demo_user_1"],
-        taggedItemId: "menu_s1",
-        taggedItemName: "Ghee Podi Masala Dosa",
-        taggedItemPrice: 110,
+        taggedItemIds: ["menu_s1"],
         createdAt: Date.now() - 7200000 // 2 hours ago
       },
       {
@@ -260,9 +256,7 @@ export async function seedInitialData() {
         description: "Baked with love! Just pulled these gorgeous, ultra-moist eggless chocolate velvet cupcakes out of the oven. Perfectly frosted and ready to sweeten your weekend. Limited batches available!",
         imageUrl: CAKE_SVG,
         likes: ["demo_user_2", "demo_user_3"],
-        taggedItemId: "menu_sw1",
-        taggedItemName: "Eggless Chocolate Velvet Cupcakes (Box of 2)",
-        taggedItemPrice: 120,
+        taggedItemIds: ["menu_sw1"],
         createdAt: Date.now() - 10800000 // 3 hours ago
       }
     ];

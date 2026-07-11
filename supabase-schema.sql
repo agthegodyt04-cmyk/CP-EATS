@@ -3,6 +3,14 @@
 -- Important: camelCase column names are quoted because Postgres lowercases
 -- unquoted identifiers, but the app writes camelCase fields through Supabase.
 
+-- Migration: upgrade existing feed_posts from single tagged item to multi-tag arrays
+ALTER TABLE IF EXISTS feed_posts
+  DROP COLUMN IF EXISTS "taggedItemName",
+  DROP COLUMN IF EXISTS "taggedItemPrice",
+  ADD COLUMN IF NOT EXISTS "taggedItemIds" TEXT[] DEFAULT '{}';
+ALTER TABLE IF EXISTS feed_posts
+  DROP COLUMN IF EXISTS "taggedItemId";
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,

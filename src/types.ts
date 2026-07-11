@@ -84,9 +84,7 @@ export interface FeedPost {
   description: string;
   imageUrl: string; // Base64 data URL (compressed to <= 250KB)
   likes: string[]; // List of user UIDs who liked
-  taggedItemId: string | null;
-  taggedItemName: string | null;
-  taggedItemPrice: number | null;
+  taggedItemIds: string[]; // Up to 5 shoppable menu item IDs
   createdAt: number;
   hasAiSparkle?: boolean;
   aiSparkleImposed?: boolean;
