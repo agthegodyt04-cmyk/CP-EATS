@@ -21,23 +21,26 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  
+
   // Navigation / Selection State
   const [selectedKitchenId, setSelectedKitchenId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  
+
   // Search / Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [vegFilter, setVegFilter] = useState<"all" | "veg" | "non-veg">("all");
-  
+
   // Menu-Specific Dietary Filter States
   const [menuVegFilter, setMenuVegFilter] = useState<"all" | "veg" | "non-veg">("all");
   const [menuGlutenFreeFilter, setMenuGlutenFreeFilter] = useState(false);
   const [menuNutFreeFilter, setMenuNutFreeFilter] = useState(false);
-  
+
+  // Local theme state to reflect toggles immediately
+  const [themePreference, setThemePreference] = useState<"light" | "dark">(currentProfile.themePreference === "dark" ? "dark" : "light");
+
   // Cart State (Key: Unique Combo Key, Value: { item, quantity, kitchenId, selectedAddOns?: SelectedAddOn[] })
   const [cart, setCart] = useState<{ [cartKey: string]: { item: MenuItem; quantity: number; kitchenId: string; selectedAddOns?: SelectedAddOn[] } }>({});
-  
+
   // Reviews State
   const [reviews, setReviews] = useState<any[]>([]);
 
@@ -51,6 +54,11 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
   // Visual state
   const [likedPosts, setLikedPosts] = useState<{ [postId: string]: boolean }>({});
   const [doubleTappedPostId, setDoubleTappedPostId] = useState<string | null>(null);
+
+  // Keep local theme in sync when profile theme changes externally
+  React.useEffect(() => {
+    setThemePreference(currentProfile.themePreference === "dark" ? "dark" : "light");
+  }, [currentProfile.themePreference]);
 
   useEffect(() => {
     setLikedPosts(prev => {
@@ -160,11 +168,12 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
   };
 
   const handleToggleTheme = async () => {
-    const nextTheme = currentProfile.themePreference === "dark" ? "light" : "dark";
+    const nextTheme = themePreference === "dark" ? "light" : "dark";
     try {
       await updateDoc(doc(db, "users", currentProfile.uid), {
         themePreference: nextTheme
       });
+      setThemePreference(nextTheme);
       if (nextTheme === "dark") {
         document.documentElement.classList.add("dark");
         document.body.classList.add("dark");
@@ -789,7 +798,8 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       return { post, kitchen, score: followBoost + createdAtMs };
     })
     .filter(({ kitchen }) => {
-      if (!kitchen) return false;
+      // If kitchen data isn't loaded yet, show the post anyway (prevents race condition)
+      if (!kitchen) return true;
       // Show posts from same society OR kitchens that deliver to the customer
       const sameSociety = (kitchen.society || "") === (currentProfile.society || "");
       const deliversHere = checkKitchenDelivers(kitchen);
@@ -889,9 +899,9 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           <button
             onClick={handleToggleTheme}
             className="p-2 text-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-            title={currentProfile.themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            title={themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {currentProfile.themePreference === "dark" ? (
+            {themePreference === "dark" ? (
               <Sun className="w-5 h-5 text-amber-500" />
             ) : (
               <Moon className="w-5 h-5 text-text-secondary" />
@@ -2228,7 +2238,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xs space-y-5 animate-scale-up">
               <div className="flex items-center gap-4 border-b border-gray-50 dark:border-slate-800 pb-5">
                 <div className="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center font-black text-2xl text-indigo-700 dark:text-indigo-400">
-                  {currentProfile.displayName.charAt(0).toUpperCase()}
+                  {(currentProfile.displayName || "?").charAt(0).toUpperCase()}
                 </div>
 
                 <div className="space-y-1">

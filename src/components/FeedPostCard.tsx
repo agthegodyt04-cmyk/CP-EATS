@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, MapPin, Sparkles, ShoppingBag, X, ShieldAlert, MessageCircle } from "lucide-react";
+import { Heart, MapPin, Sparkles, ShoppingBag, X, ShieldAlert, MessageCircle, Plus, Minus } from "lucide-react";
 import { FeedPost, MenuItem, KitchenDetails } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -48,6 +48,8 @@ export default function FeedPostCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isLikeThrottled, setIsLikeThrottled] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [showTaggedPanel, setShowTaggedPanel] = useState(false);
+  const [taggedQuantities, setTaggedQuantities] = useState<Record<string, number>>({});
 
   if (!kitchen) return null;
   const isOnline = kitchen.operatingMode === "online";
@@ -70,6 +72,43 @@ export default function FeedPostCard({
     setTimeout(() => {
       setIsLikeThrottled(false);
     }, 800);
+  };
+
+  const handleBagClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowTaggedPanel(true);
+  };
+
+  const handleAddItem = (item: MenuItem) => {
+    setTaggedQuantities(prev => ({ ...prev, [item.id]: 1 }));
+  };
+
+  const handleIncrement = (item: MenuItem) => {
+    setTaggedQuantities(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
+  };
+
+  const handleDecrement = (itemId: string) => {
+    setTaggedQuantities(prev => {
+      const current = prev[itemId] || 0;
+      if (current <= 1) {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      }
+      return { ...prev, [itemId]: current - 1 };
+    });
+  };
+
+  const confirmAddToCart = (item: MenuItem) => {
+    const qty = taggedQuantities[item.id] || 1;
+    for (let i = 0; i < qty; i++) {
+      onAddToCart(item, post.kitchenId);
+    }
+    setTaggedQuantities(prev => {
+      const next = { ...prev };
+      delete next[item.id];
+      return next;
+    });
   };
 
   return (
@@ -106,7 +145,7 @@ export default function FeedPostCard({
                   isFollowed
                     ? "bg-brand-primary text-white border-brand-primary"
                     : "bg-white dark:bg-slate-950 text-brand-primary border-brand-primary/20 hover:border-brand-primary"
-                }`}
+              }`}
             >
               {isFollowed ? "Following" : "Follow"}
             </button>
@@ -181,24 +220,17 @@ export default function FeedPostCard({
             </div>
           )}
 
-          {/* Shoppable Tag - jumping bag only, bottom-left */}
-          {showTaggedItem && currentUserRole !== "kitchen" && (
+          {/* Shoppable Tag - jumping bag only, bottom-right */}
+          {currentUserRole !== "kitchen" && (
             <div className="absolute bottom-3 right-3">
               <button
                 disabled={isAdding}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isAdding) return;
-                  setIsAdding(true);
-                  taggedItems.forEach(item => onAddToCart(item, post.kitchenId));
-                  onSelectTab("cart");
-                  setTimeout(() => setIsAdding(false), 800);
-                }}
+                onClick={handleBagClick}
                 className={`bg-white/10 hover:bg-white/20 dark:bg-black/20 dark:hover:bg-black/35 backdrop-blur-md border border-white/25 dark:border-white/10 text-white rounded-full p-2.5 shadow-lg transition-all ${
                   isAdding ? "opacity-75 cursor-not-allowed" : ""
                 }`}
               >
-                <ShoppingBag className={`w-4 h-4 text-brand-primary ${isAdding ? "animate-spin" : "animate-bounce"}`} />
+                <ShoppingBag className={`w-5 h-5 text-orange-500 ${isAdding ? "animate-spin" : "animate-bounce"}`} />
               </button>
             </div>
           )}
@@ -257,6 +289,99 @@ export default function FeedPostCard({
           )}
         </div>
       </motion.div>
+
+      {/* Tagged Items Slide-up Panel */}
+      <AnimatePresence>
+        {showTaggedPanel && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowTaggedPanel(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 24, stiffness: 180 }}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-900 rounded-t-[32px] border-t border-gray-100 dark:border-slate-800 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] max-h-[70vh] flex flex-col"
+            >
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-slate-700" />
+              </div>
+
+              <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-text-primary">Tagged Items</h3>
+                  <p className="text-[10px] text-text-muted font-bold">{taggedItems.length} items from this post</p>
+                </div>
+                <button
+                  onClick={() => setShowTaggedPanel(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5 text-text-muted" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto px-5 py-3 space-y-2">
+                {taggedItems.length === 0 && (
+                  <div className="text-center py-6">
+                    <p className="text-xs text-text-muted font-bold">No items tagged in this post</p>
+                  </div>
+                )}
+                {taggedItems.map(item => {
+                  const qty = taggedQuantities[item.id] || 0;
+                  return (
+                    <div key={item.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-text-primary truncate">{item.name}</p>
+                        <p className="text-[10px] text-text-muted font-bold">₹{item.price.toFixed(2)}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {qty > 0 ? (
+                          <>
+                            <button
+                              onClick={() => handleDecrement(item.id)}
+                              className="w-8 h-8 rounded-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 flex items-center justify-center text-text-primary hover:border-brand-primary transition-colors cursor-pointer"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs font-black text-text-primary w-6 text-center">{qty}</span>
+                            <button
+                              onClick={() => handleIncrement(item)}
+                              className="w-8 h-8 rounded-full bg-brand-primary text-white flex items-center justify-center hover:bg-brand-primary/90 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => confirmAddToCart(item)}
+                              className="ml-1 px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                            >
+                              Add
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleAddItem(item)}
+                            className="px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Instagram-style lightbox */}
       <AnimatePresence>

@@ -4,11 +4,37 @@ import { turso } from './turso';
 type Listener = () => void;
 
 const supabaseChannels = new Map<string, ReturnType<typeof supabase.channel>>();
-const listeners = new Map<string, Set<Listener>>();
+const listeners = new Map<string, Map<any, Set<Listener>>>();
 
 function notify(table: string) {
-  const set = listeners.get(table);
-  if (set) set.forEach(fn => fn());
+  const listenerMap = listeners.get(table);
+  if (!listenerMap) return;
+  listenerMap.forEach(set => set.forEach(fn => fn()));
+}
+
+function ensureRealtimeSubscription(table: string) {
+  if (supabaseChannels.has(table)) return;
+
+  const channel = supabase
+    .channel(`realtime:${table}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table,
+      },
+      () => {
+        notify(table);
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error(`Supabase realtime subscription failed for table: ${table}`);
+      }
+    });
+
+  supabaseChannels.set(table, channel);
 }
 
 export function deleteField() {
@@ -47,36 +73,43 @@ export function buildQuery(collectionRef: any, ...constraints: any[]) {
   return q;
 }
 
+// ============================================================
+// COLUMN NAME LOCKED: matches supabase-schema.sql quoted camelCase
+// DO NOT MODIFY without also updating supabase-schema.sql
+// Runtime aliases are identity mappings for all camelCase tables.
+// The fallback in resolveColumn passes through any unmapped
+// field unchanged, so unknown columns still resolve as-is.
+// ============================================================
 const COLUMN_ALIASES: Record<string, Partial<Record<string, string>>> = {
-  favorites: { userId: 'userid', menuItemId: 'menuitemid', kitchenId: 'kitchenid' },
-  notifications: { userId: 'userid' },
-  follows: { followerId: 'followerid', kitchenId: 'kitchenid' },
-  comments: { postId: 'postid', userId: 'userid', userName: 'username', userRole: 'userrole', kitchenId: 'kitchenid' },
-  reviews: { orderId: 'orderid', customerId: 'customerid', customerName: 'customername', kitchenId: 'kitchenid', isHandpicked: 'ishandpicked', taggedItemIds: 'taggeditemids' },
-  chats: { orderId: 'orderid', senderId: 'senderid', senderName: 'sendername', isUpiCard: 'isupicard', qrCodeUrl: 'qrcodeurl' },
-  kitchen_chats: { conversationId: 'conversationid', senderId: 'senderid', senderName: 'sendername', senderHandle: 'senderhandle', recipientId: 'recipientid', recipientName: 'recipientname', recipientHandle: 'recipienthandle' },
-  address_registry: { flatAddress: 'flataddress' },
+  favorites: { userId: 'userId', menuItemId: 'menuItemId', kitchenId: 'kitchenId' },
+  notifications: { userId: 'userId' },
+  follows: { followerId: 'followerId', kitchenId: 'kitchenId' },
+  comments: { postId: 'postId', userId: 'userId', userName: 'userName', userRole: 'userRole', kitchenId: 'kitchenId' },
+  reviews: { orderId: 'orderId', customerId: 'customerId', customerName: 'customerName', kitchenId: 'kitchenId', isHandpicked: 'isHandpicked', taggedItemIds: 'taggedItemIds' },
+  chats: { orderId: 'orderId', senderId: 'senderId', senderName: 'senderName', isUpiCard: 'isUpiCard', qrCodeUrl: 'qrCodeUrl' },
+  kitchen_chats: { conversationId: 'conversationId', senderId: 'senderId', senderName: 'senderName', senderHandle: 'senderHandle', recipientId: 'recipientId', recipientName: 'recipientName', recipientHandle: 'recipientHandle' },
+  address_registry: { flatAddress: 'flatAddress' },
   users: { createdAt: 'created_at' },
 };
 
 export function resolveColumn(table: string, column: string): string {
   if (column === 'id') return column;
-  return COLUMN_ALIASES[table]?.[column] || column;
+  return COLUMN_ALIASES[table]?.[column] || TABLE_SPECIFIC_ALIASES[table]?.[column] || column;
 }
 
 const TABLE_SPECIFIC_ALIASES: Record<string, Partial<Record<string, string>>> = {
   ...COLUMN_ALIASES,
-  feed_posts: { kitchenId: 'kitchenid', kitchenName: 'kitchenname', createdAt: 'createdat', hasAiSparkle: 'hasaisparkle', aiSparkleImposed: 'aisparkleimposed', taggedItemIds: 'taggeditemids' },
-  orders: { customerId: 'customerid', customerName: 'customername', customerPhone: 'customerphone', customerAddress: 'customeraddress', kitchenId: 'kitchenid', kitchenName: 'kitchenname', subtotal: 'subtotal', total: 'total', deliveryType: 'deliverytype', deliveryPin: 'deliverypin', createdAt: 'createdat', scheduledTime: 'scheduledtime' },
-  kitchens: { kitchenId: 'kitchenid', kitchenName: 'kitchenname', profileImageUrl: 'profileimageurl', ringtoneMode: 'ringtonemode', ringtoneChoice: 'ringtonechoice', ringtoneUrl: 'ringtoneurl', vegType: 'vegtype', isOnline: 'isonline', restingUntil: 'restinguntil', operatingMode: 'operatingmode', deliveryLocations: 'deliverylocations', customCategories: 'customcategories' },
-  menu_items: { kitchenId: 'kitchenid', imageUrl: 'imageurl', isGlutenFree: 'isglutenfree', isNutFree: 'isnutfree', isAvailable: 'isavailable', postId: 'postid' },
-  comments: { postId: 'postid', userId: 'userid', userName: 'username', userRole: 'userrole', kitchenId: 'kitchenid', createdAt: 'createdat' },
-  reviews: { orderId: 'orderid', customerId: 'customerid', customerName: 'customername', kitchenId: 'kitchenid', isHandpicked: 'ishandpicked', taggedItemIds: 'taggeditemids', createdAt: 'createdat' },
-  chats: { orderId: 'orderid', senderId: 'senderid', senderName: 'sendername', isUpiCard: 'isupicard', qrCodeUrl: 'qrcodeurl', createdAt: 'createdat' },
-  kitchen_chats: { conversationId: 'conversationid', senderId: 'senderid', senderName: 'sendername', senderHandle: 'senderhandle', recipientId: 'recipientid', recipientName: 'recipientname', recipientHandle: 'recipienthandle', createdAt: 'createdat' },
-  notifications: { userId: 'userid', createdAt: 'createdat' },
-  favorites: { userId: 'userid', menuItemId: 'menuitemid', kitchenId: 'kitchenid', createdAt: 'createdat' },
-  follows: { followerId: 'followerid', kitchenId: 'kitchenid', createdAt: 'createdat' },
+  feed_posts: { kitchenId: 'kitchenId', kitchenName: 'kitchenName', createdAt: 'createdAt', hasAiSparkle: 'hasAiSparkle', aiSparkleImposed: 'aiSparkleImposed', taggedItemIds: 'taggedItemIds' },
+  orders: { customerId: 'customerId', customerName: 'customerName', customerPhone: 'customerPhone', customerAddress: 'customerAddress', kitchenId: 'kitchenId', kitchenName: 'kitchenName', subtotal: 'subtotal', total: 'total', deliveryType: 'deliveryType', deliveryPin: 'deliveryPin', createdAt: 'createdAt', scheduledTime: 'scheduledTime' },
+  kitchens: { kitchenId: 'kitchenId', kitchenName: 'kitchenName', profileImageUrl: 'profileImageUrl', ringtoneMode: 'ringtoneMode', ringtoneChoice: 'ringtoneChoice', ringtoneUrl: 'ringtoneUrl', vegType: 'vegType', isOnline: 'isOnline', restingUntil: 'restingUntil', operatingMode: 'operatingMode', deliveryLocations: 'deliveryLocations', customCategories: 'customCategories' },
+  menu_items: { kitchenId: 'kitchenId', imageUrl: 'imageUrl', isGlutenFree: 'isGlutenFree', isNutFree: 'isNutFree', isAvailable: 'isAvailable', postId: 'postId', createdAt: 'createdAt', isVeg: 'isVeg' },
+  comments: { postId: 'postId', userId: 'userId', userName: 'userName', userRole: 'userRole', kitchenId: 'kitchenId', createdAt: 'createdAt' },
+  reviews: { orderId: 'orderId', customerId: 'customerId', customerName: 'customerName', kitchenId: 'kitchenId', isHandpicked: 'isHandpicked', taggedItemIds: 'taggedItemIds', createdAt: 'createdAt' },
+  chats: { orderId: 'orderId', senderId: 'senderId', senderName: 'senderName', isUpiCard: 'isUpiCard', qrCodeUrl: 'qrCodeUrl', createdAt: 'createdAt' },
+  kitchen_chats: { conversationId: 'conversationId', senderId: 'senderId', senderName: 'senderName', senderHandle: 'senderHandle', recipientId: 'recipientId', recipientName: 'recipientName', recipientHandle: 'recipientHandle', createdAt: 'createdAt' },
+  notifications: { userId: 'userId', createdAt: 'createdAt' },
+  favorites: { userId: 'userId', menuItemId: 'menuItemId', kitchenId: 'kitchenId', createdAt: 'createdAt' },
+  follows: { followerId: 'followerId', kitchenId: 'kitchenId', createdAt: 'createdAt' },
 };
 
 export { TABLE_SPECIFIC_ALIASES };
@@ -152,11 +185,22 @@ export async function getDoc(ref: any): Promise<{ exists: () => boolean; data: (
   };
 }
 
-export async function getDocs(q: any): Promise<{ docs: any[]; empty: boolean; forEach: (fn: (d: any) => void) => void }> {
+export async function getDocs(q: any): Promise<{ docs: any[]; empty: boolean; forEach: (fn: (d: any) => void) => void; error?: any }> {
   const table = q.table;
   const queryBuilder = await applyConstraints(table, q.constraints || []);
-  const { data, error } = await queryBuilder;
-  if (error) return { docs: [], empty: true, forEach: () => {} };
+  let data: any = null;
+  let error: any = null;
+  try {
+    const result = await queryBuilder;
+    data = result.data;
+    error = result.error;
+  } catch (err) {
+    error = err;
+  }
+  if (error) {
+    console.error(`getDocs query failed for table "${table}":`, error);
+    return { docs: [], empty: true, forEach: () => {}, error };
+  }
   const docs = (data || []).map((row: any) => {
     const normalized = denormalizeRow(table, row);
     return {
@@ -208,16 +252,42 @@ export function onSnapshot(q: any, callback: (snapshot: any) => void, errorCb?: 
   const table = q.table;
 
   if (!listeners.has(table)) {
-    listeners.set(table, new Set());
+    listeners.set(table, new Map());
   }
-  const set = listeners.get(table)!;
+  const listenerMap = listeners.get(table)!;
+  const set = new Set<Listener>();
+  listenerMap.set(callback, set);
+
+  ensureRealtimeSubscription(table);
+  let previousDocs: any[] = [];
+
   const listener = () => {
     getDocs(q).then(snap => {
+      const added: any[] = [];
+      const modified: any[] = [];
+      const removed: any[] = [];
+      const currentMap = new Map(snap.docs.map(d => [d.id, d]));
+      const prevMap = new Map(previousDocs.map(d => [d.id, d]));
+
+      for (const doc of snap.docs) {
+        if (!prevMap.has(doc.id)) added.push(doc);
+        else if (prevMap.get(doc.id) !== doc) modified.push(doc);
+      }
+      for (const doc of previousDocs) {
+        if (!currentMap.has(doc.id)) removed.push(doc);
+      }
+
+      previousDocs = snap.docs;
+
       callback({
         docs: snap.docs,
         empty: snap.empty,
         forEach: snap.forEach,
-        docChanges: () => snap.docs.map((d: any) => ({ type: 'added' as const, doc: d }))
+        docChanges: () => [
+          ...added.map(doc => ({ type: 'added' as const, doc })),
+          ...modified.map(doc => ({ type: 'modified' as const, doc })),
+          ...removed.map(doc => ({ type: 'removed' as const, doc }))
+        ]
       });
     }).catch(err => errorCb?.(err));
   };
@@ -227,7 +297,11 @@ export function onSnapshot(q: any, callback: (snapshot: any) => void, errorCb?: 
 
   return () => {
     set.delete(listener);
-    if (set.size === 0) {
+    const entry = listenerMap.get(callback);
+    if (!entry || entry.size === 0) {
+      listenerMap.delete(callback);
+    }
+    if (listenerMap.size === 0) {
       listeners.delete(table);
       const ch = supabaseChannels.get(table);
       if (ch) {

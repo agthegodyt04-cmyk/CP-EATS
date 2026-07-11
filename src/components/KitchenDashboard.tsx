@@ -37,8 +37,14 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   // Sound & Ringtone customisation states
   const prevOrdersLoadedRef = React.useRef(false);
+  // Track order IDs that have already triggered the new-order popup so
+  // cancelled/rejected orders never re-fire it on the next realtime tick.
+  const shownOrderIdsRef = React.useRef<Set<string>>(new Set());
   // Navigation Selection
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Local theme state to reflect toggles immediately
+  const [themePreference, setThemePreference] = useState<"light" | "dark">(currentProfile.themePreference === "dark" ? "dark" : "light");
 
   // Form States
   const [newDishName, setNewDishName] = useState("");
@@ -64,6 +70,9 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   // Delivery Pin state
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
+  
+  // New order popup state (Zomato-style)
+  const [incomingNewOrder, setIncomingNewOrder] = useState<Order | null>(null);
 
   // UPI configuration drawer state
   const [upiId, setUpiId] = useState("");
@@ -117,7 +126,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         console.error("Custom ringtone playback failed, falling back to builtin:", err);
       }
     }
-    playRingtone(kitchenRingtoneChoice || "Piping Hot");
+    await playRingtone(kitchenRingtoneChoice || "Piping Hot");
   };
 
   const uploadProfileImage = async (file: File | null) => {
@@ -182,11 +191,12 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   };
 
   const handleToggleTheme = async () => {
-    const nextTheme = currentProfile.themePreference === "dark" ? "light" : "dark";
+    const nextTheme = themePreference === "dark" ? "light" : "dark";
     try {
       await updateDoc(doc(db, "users", currentProfile.uid), {
         themePreference: nextTheme
       });
+      setThemePreference(nextTheme);
       if (nextTheme === "dark") {
         document.documentElement.classList.add("dark");
         document.body.classList.add("dark");
@@ -288,15 +298,27 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
       snap.forEach(d => list.push({ id: d.id, ...d.data() } as Order));
       list.sort((a, b) => b.createdAt - a.createdAt);
 
-      let hasAddedOrder = false;
+      let hasNewPendingOrder = false;
+      let newestPendingOrder: Order | null = null;
       snap.docChanges().forEach((change) => {
         if (change.type === "added") {
-          hasAddedOrder = true;
+          const orderData = change.doc.data() as Order;
+          // Only treat genuinely new PENDING orders as incoming alerts.
+          // Previously every snapshot refresh was reported as "added",
+          // which caused cancelled/rejected orders to re-popup forever.
+          if (orderData.status === "PENDING" && !shownOrderIdsRef.current.has(change.doc.id)) {
+            hasNewPendingOrder = true;
+            if (!newestPendingOrder || orderData.createdAt > newestPendingOrder.createdAt) {
+              newestPendingOrder = { id: change.doc.id, ...orderData };
+            }
+          }
         }
       });
 
-      if (hasAddedOrder && prevOrdersLoadedRef.current) {
+      if (hasNewPendingOrder && prevOrdersLoadedRef.current && newestPendingOrder) {
+        shownOrderIdsRef.current.add(newestPendingOrder.id);
         void playConfiguredRingtone();
+        setIncomingNewOrder(newestPendingOrder);
       }
 
       prevOrdersLoadedRef.current = true;
@@ -934,7 +956,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
       {/* Header */}
       <header className="sticky top-0 bg-background-secondary/95 dark:bg-background-secondary/90 backdrop-blur-md border-b border-border-primary px-6 py-4 flex items-center justify-between z-30 shadow-theme">
-        <div 
+        <div
           onClick={() => {
             setSelectedOrderId(null);
             setActiveTab("orders");
@@ -956,9 +978,9 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           <button
             onClick={handleToggleTheme}
             className="p-2 text-text-muted hover:text-brand-primary dark:hover:text-amber-400 transition-colors cursor-pointer"
-            title={currentProfile.themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            title={themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {currentProfile.themePreference === "dark" ? (
+            {themePreference === "dark" ? (
               <Sun className="w-5 h-5 text-amber-400 animate-pulse" />
             ) : (
               <Moon className="w-5 h-5 text-text-muted" />
@@ -1044,14 +1066,15 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                     className="p-5 bg-background-secondary rounded-3xl border border-border-primary shadow-theme hover:shadow-md hover:border-brand-primary/40 transition-all cursor-pointer flex justify-between items-center animate-fade-in"
                   >
                     <div className="space-y-2 pr-4 truncate">
-                      <div>
-                        <h3 className="font-extrabold text-xs text-text-primary truncate">
-                          {ord.customerName} ({ord.customerAddress.split(",")[1]?.trim() || "Flat"})
-                        </h3>
-                        <p className="text-[10px] text-text-muted font-bold">
-                          {ord.items.length} items • ₹{ord.total}
-                        </p>
-                      </div>
+                       <div>
+                         <h3 className="font-extrabold text-xs text-text-primary truncate">
+                           {ord.customerName}
+                           {ord.customerAddress ? ` (${ord.customerAddress.split(",")[1]?.trim() || "Flat"})` : ""}
+                         </h3>
+                         <p className="text-[10px] text-text-muted font-bold">
+                           {ord.items.length} items • ₹{ord.total}
+                         </p>
+                       </div>
 
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] bg-background-primary border border-border-primary text-text-secondary px-1.5 py-0.5 rounded-sm font-mono font-medium">
@@ -1526,6 +1549,47 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                       }`}
                     >
                       {item.isAvailable ? "Active" : "Resting"}
+                    </button>
+
+                    {/* Quick buy / place test order directly */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const orderId = "order_" + Date.now();
+                          const orderData = {
+                            id: orderId,
+                            customerId: currentProfile.uid,
+                            customerName: currentProfile.displayName || "Customer",
+                            customerPhone: currentProfile.phone || "",
+                            customerAddress: currentProfile.flatAddress || "",
+                            kitchenId: currentProfile.uid,
+                            kitchenName: kitchenDetails?.kitchenName || currentProfile.displayName,
+                            items: [
+                              {
+                                itemId: item.id,
+                                name: item.name,
+                                price: item.price,
+                                quantity: 1,
+                                selectedAddOns: []
+                              }
+                            ],
+                            subtotal: item.price,
+                            total: item.price,
+                            deliveryType: "pickup" as const,
+                            status: "PENDING" as const,
+                            deliveryPin: Math.floor(1000 + Math.random() * 9000).toString(),
+                            createdAt: new Date().toISOString()
+                          };
+                          await setDoc(doc(db, "orders", orderId), orderData);
+                          showToast("Quick order placed! 🎉");
+                        } catch (err) {
+                          console.error("Quick buy failed:", err);
+                          showToast("Failed to place quick order.");
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border bg-brand-primary text-white border-brand-primary hover:bg-brand-primary/90 transition-all cursor-pointer"
+                    >
+                      Buy Now
                     </button>
 
                     {/* Delete */}
@@ -2168,7 +2232,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                         setKitchenRingtoneChoice(rt.id);
                         localStorage.setItem("kitchen_ringtone_choice", rt.id);
                         localStorage.setItem("kitchen_ringtone_mode", "builtin");
-                        playRingtone(rt.id);
+                        void playRingtone(rt.id);
                       }}
                       className={`py-2.5 px-3 text-xs font-bold border rounded-xl transition-all flex items-center justify-between cursor-pointer ${
                         kitchenRingtoneMode === "builtin" && kitchenRingtoneChoice === rt.id
@@ -2408,6 +2472,107 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
               >
                 Confirm Change
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zomato-style New Order Popup */}
+      {incomingNewOrder && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+          <div className="w-full sm:max-w-md bg-background-secondary rounded-t-3xl sm:rounded-3xl shadow-2xl border border-border-primary overflow-hidden animate-slide-up">
+            {/* Header with ringtone indicator */}
+            <div className="bg-gradient-to-r from-brand-primary to-brand-primary/80 p-5 text-white space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl animate-bounce">🔔</span>
+                  <h2 className="text-sm font-black uppercase tracking-wider">New Order Incoming!</h2>
+                </div>
+                <span className="px-2.5 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-wider">
+                  {incomingNewOrder.deliveryType === "pickup" ? "Self-Pickup" : "Door Delivery"}
+                </span>
+              </div>
+              <p className="text-[10px] text-white/80 font-semibold">
+                A resident has placed an order from your kitchen
+              </p>
+            </div>
+
+            {/* Customer Info */}
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-border-primary">
+                <div className="w-10 h-10 rounded-full bg-brand-primary-container flex items-center justify-center font-black text-sm text-brand-primary">
+                  {incomingNewOrder.customerName?.charAt(0).toUpperCase() || "?"}
+                </div>
+                <div>
+                  <p className="text-sm font-extrabold text-text-primary">{incomingNewOrder.customerName}</p>
+                  <p className="text-[10px] text-text-muted font-semibold">📍 {incomingNewOrder.customerAddress}</p>
+                  <p className="text-[10px] text-text-muted font-semibold">📞 {incomingNewOrder.customerPhone}</p>
+                </div>
+              </div>
+
+              {/* Order Items Receipt */}
+              <div className="bg-background-primary rounded-2xl p-4 border border-border-primary space-y-2.5">
+                <p className="text-[10px] font-extrabold text-text-muted uppercase tracking-widest">Order Items</p>
+                <div className="divide-y divide-border-primary">
+                  {(incomingNewOrder.items || []).map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-text-primary">{item.quantity}x</span>
+                        <span className="text-xs font-semibold text-text-primary">{item.name}</span>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-text-secondary">₹{(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-border-primary">
+                  <span className="text-xs font-extrabold text-text-primary">Total</span>
+                  <span className="text-sm font-black font-mono text-brand-primary">₹{incomingNewOrder.total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Scheduled Time */}
+              {incomingNewOrder.scheduledTime && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900 rounded-xl flex items-center gap-2">
+                  <span className="text-sm">🕒</span>
+                  <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                    Scheduled: {incomingNewOrder.scheduledTime.includes("T") ? new Date(incomingNewOrder.scheduledTime).toLocaleString() : incomingNewOrder.scheduledTime}
+                  </p>
+                </div>
+              )}
+
+              {/* Accept / Decline Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateDoc(doc(db, "orders", incomingNewOrder.id), { status: "CANCELLED" });
+                      showToast("Order declined.");
+                      setIncomingNewOrder(null);
+                    } catch (err) {
+                      console.error("Error declining order:", err);
+                    }
+                  }}
+                  className="py-3 border-2 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 dark:text-rose-400 font-extrabold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Decline ❌
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateDoc(doc(db, "orders", incomingNewOrder.id), { status: "ACCEPTED" });
+                      showToast("Order accepted! Start preparing. 🍳");
+                      setIncomingNewOrder(null);
+                      setSelectedOrderId(incomingNewOrder.id);
+                      setActiveTab("orders");
+                    } catch (err) {
+                      console.error("Error accepting order:", err);
+                    }
+                  }}
+                  className="py-3 bg-brand-primary hover:bg-brand-primary/90 text-white font-extrabold rounded-xl text-xs shadow-sm transition-all cursor-pointer"
+                >
+                  Accept & Prepare ✅
+                </button>
+              </div>
             </div>
           </div>
         </div>
