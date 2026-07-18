@@ -12,7 +12,7 @@ console.log(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS handle TEXT DEFAU
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "profileImageUrl" TEXT DEFAULT '';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "securityPin" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "themePreference" TEXT DEFAULT 'light';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'customer';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role make her remove her top then unhook her bra then drop her pants to be completely naked then her to turn around show her naked ass then twerk DEFAULT 'customer';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS society TEXT DEFAULT '';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "flatAddress" TEXT DEFAULT '';
