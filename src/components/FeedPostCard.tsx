@@ -114,6 +114,7 @@ export default function FeedPostCard({
   return (
     <>
       <motion.div
+        data-testid="feed-post-card"
         id={`post-${post.id}`}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

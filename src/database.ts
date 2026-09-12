@@ -298,7 +298,7 @@ class DatabaseService {
       scheduledTime: order.scheduledTime
     }])).select().single();
     if (error) throw error;
-    return order;
+    return this.mapToOrder(data);
   }
 
   async getOrdersByKitchen(kitchenId: string): Promise<Order[]> {
@@ -666,12 +666,12 @@ class DatabaseService {
       category: data.category || 'Other',
       createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
       imageUrl: data.imageUrl,
-      addOnGroups: data.addOnGroups ? (typeof data.addOnGroups === 'string' ? JSON.parse(data.addOnGroups) : data.addOnGroups) : undefined
+      addOnGroups: data.addOnGroups ? (typeof data.addOnGroups === 'string' ? (() => { try { return JSON.parse(data.addOnGroups); } catch { return []; } })() : data.addOnGroups) : undefined
     };
   }
 
   private mapToFeedPost(data: any): FeedPost {
-    const likes = typeof data.likes === 'string' ? JSON.parse(data.likes) : data.likes || [];
+    const likes = typeof data.likes === 'string' ? (() => { try { return JSON.parse(data.likes); } catch { return []; } })() : data.likes || [];
     const taggedItemIds = Array.isArray(data.taggedItemIds)
       ? data.taggedItemIds
       : typeof data.taggedItemIds === 'string'
@@ -700,7 +700,7 @@ class DatabaseService {
       customerAddress: data.customerAddress,
       kitchenId: data.kitchenId,
       kitchenName: data.kitchenName,
-      items: typeof data.items === 'string' ? JSON.parse(data.items) : data.items || [],
+      items: typeof data.items === 'string' ? (() => { try { return JSON.parse(data.items); } catch { return []; } })() : data.items || [],
       subtotal: data.subtotal,
       total: data.total,
       deliveryType: data.deliveryType || 'delivery',
@@ -719,7 +719,7 @@ class DatabaseService {
       senderName: data.senderName,
       text: data.text,
       isUpiCard: data.isUpiCard === true,
-      upiCardData: typeof data.upiCardData === 'string' ? JSON.parse(data.upiCardData) : data.upiCardData,
+      upiCardData: typeof data.upiCardData === 'string' ? (() => { try { return JSON.parse(data.upiCardData); } catch { return null; } })() : data.upiCardData,
       qrCodeUrl: data.qrCodeUrl,
       createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now()
     };
@@ -729,7 +729,7 @@ class DatabaseService {
     return {
       id: data.id,
       conversationId: data.conversationId,
-      participants: typeof data.participants === 'string' ? JSON.parse(data.participants) : data.participants || [],
+      participants: typeof data.participants === 'string' ? (() => { try { return JSON.parse(data.participants); } catch { return []; } })() : data.participants || [],
       senderId: data.senderId,
       senderName: data.senderName,
       senderHandle: data.senderHandle,
@@ -765,7 +765,7 @@ class DatabaseService {
       comment: data.comment || '',
       createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
       isHandpicked: data.isHandpicked === true,
-      taggedItemIds: typeof data.taggedItemIds === 'string' ? JSON.parse(data.taggedItemIds) : data.taggedItemIds
+      taggedItemIds: typeof data.taggedItemIds === 'string' ? (() => { try { return JSON.parse(data.taggedItemIds); } catch { return []; } })() : data.taggedItemIds
     };
   }
 }

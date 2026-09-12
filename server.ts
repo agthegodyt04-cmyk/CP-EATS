@@ -172,8 +172,8 @@ async function startServer() {
     console.log("✓ Static files distribution mounted.");
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`✓ CP-Eats full-stack server running on http://localhost:${PORT}`);
+  app.listen(PORT, "192.168.1.10", () => {
+    console.log(`✓ CP-Eats full-stack server running on http://192.168.1.10:${PORT}`);
   });
 }
 

@@ -618,7 +618,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
         userName: currentProfile.displayName || "User",
         userRole: currentProfile.role,
         text,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
         kitchenId: post.kitchenId
       });
       setComments(prev => [...prev, {
@@ -628,7 +628,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
         userName: currentProfile.displayName || "User",
         userRole: currentProfile.role,
         text,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
         kitchenId: post.kitchenId
       }]);
       setCommentDraft("");
@@ -833,7 +833,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
 
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-100 pb-20 transition-colors duration-200">
+    <div data-testid="customer-dashboard" className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-slate-100 pb-20 transition-colors duration-200">
       {/* Toast Overlay */}
       {toastMessage && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 px-4 py-3 bg-slate-900 text-white text-xs font-semibold rounded-2xl shadow-lg z-50 flex items-center gap-2 animate-scale-up">
@@ -897,6 +897,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           )}
 
           <button
+            data-testid="theme-toggle"
             onClick={handleToggleTheme}
             className="p-2 text-text-muted hover:text-brand-primary transition-colors cursor-pointer"
             title={themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -909,6 +910,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           </button>
 
           <button
+            data-testid="logout-button"
             onClick={onLogout}
             className="p-2 text-text-muted hover:text-rose-500 transition-colors cursor-pointer"
             title="Log Out"
@@ -2339,7 +2341,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
 
       {/* Bottom Navigation Bar */}
       {!(selectedKitchenId || selectedOrderId) && (
-        <nav className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-800 p-2 py-3 flex justify-around items-center z-40 shadow-lg">
+        <nav data-testid="nav-customer" className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-800 p-2 py-3 flex justify-around items-center z-40 shadow-lg">
           {[
             { id: "feed", label: "Discover", icon: "🍳" },
             { id: "directory", label: "Kitchens", icon: "📖" },
@@ -2349,6 +2351,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
           ].map((tab) => (
             <button
               key={tab.id}
+              data-testid={tab.id !== "cart" ? `nav-${tab.id}` : undefined}
               onClick={() => {
                 setActiveTab(tab.id as any);
                 setSelectedKitchenId(null);
@@ -2403,7 +2406,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
                   <div key={group.id} className="space-y-3 bg-gray-50/50 dark:bg-slate-950/40 p-4 border border-gray-100 dark:border-slate-800 rounded-2xl">
                     <div className="flex justify-between items-center text-xs pb-2 border-b border-gray-100 dark:border-slate-800">
                       <div>
-                        <span className="font-extrabold text-gray-900 dark:text-slate-100">{group.name}</span>
+                        <span className="font-extrabold text-gray-900 dark:text-slate-100">{group.title}</span>
                         {isRequired && <span className="text-rose-500 font-black ml-1">*</span>}
                       </div>
                       <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -2475,7 +2478,7 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
                     customPrice += opt.price;
                     selectedFlatAddOns.push({
                       groupId: group.id,
-                      groupTitle: group.name,
+                      groupTitle: group.title,
                       optionId: opt.id,
                       optionName: opt.name,
                       price: opt.price

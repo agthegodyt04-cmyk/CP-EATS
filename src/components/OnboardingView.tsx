@@ -388,7 +388,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
       opacity: 1,
       scale: 1,
       transition: {
-        x: { type: "spring", stiffness: 350, damping: 30 },
+        x: { type: "spring" as const, stiffness: 350, damping: 30 },
         opacity: { duration: 0.15 },
       },
     },
@@ -397,7 +397,7 @@ export default function OnboardingView({ userId, userEmail, onOnboardingComplete
       opacity: 0,
       scale: 0.98,
       transition: {
-        x: { type: "spring", stiffness: 350, damping: 30 },
+        x: { type: "spring" as const, stiffness: 350, damping: 30 },
         opacity: { duration: 0.15 },
       },
     }),

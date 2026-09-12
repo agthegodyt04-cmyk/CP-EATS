@@ -170,7 +170,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-indigo-200">
+      <div data-testid="loading-screen" className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-indigo-200">
         <div className="w-12 h-12 rounded-xl bg-indigo-600 animate-spin flex items-center justify-center text-white text-lg font-black mb-4">
           CP
         </div>
@@ -250,7 +250,7 @@ export default function App() {
 
   // LANDING PAGE & LOGIN OPTIONS
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 py-12 relative overflow-hidden font-sans">
+    <div data-testid="app-landing" className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 py-12 relative overflow-hidden font-sans">
       {/* Background glowing gradients */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full filter blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-600/5 rounded-full filter blur-3xl pointer-events-none" />
@@ -300,6 +300,7 @@ export default function App() {
 
           {/* Google Auth Sign In */}
           <button
+            data-testid="google-signin-button"
             onClick={handleGoogleSignIn}
             className="w-full py-3.5 bg-white hover:bg-slate-50 text-slate-900 rounded-2xl text-xs font-black shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >

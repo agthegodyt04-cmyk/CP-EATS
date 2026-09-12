@@ -8,7 +8,8 @@ const tursoConfig = {
 const turso = createClient(tursoConfig);
 
 async function initializeDatabase() {
-  const statements = [
+  try {
+    const statements = [
     `CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL,
@@ -197,6 +198,11 @@ async function initializeDatabase() {
   }
 
   console.log('Turso database initialized successfully');
+} catch (error) {
+  console.error('Turso database initialization failed:', error);
+  throw error;
+}
+
 }
 
 export async function getUserById(userId: string) {
@@ -204,7 +210,7 @@ export async function getUserById(userId: string) {
     sql: 'SELECT * FROM users WHERE id = ?',
     args: [userId]
   });
-  return result.rows[0] as any;
+  return result.rows[0] as any | undefined;
 }
 
 export async function createUser(user: { id: string; email: string; name?: string }) {

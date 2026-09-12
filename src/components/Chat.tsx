@@ -165,9 +165,15 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
                 <p className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Create UPI Request Card</p>
                 <div className="flex gap-2">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*"
                     value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, "");
+                      const parts = val.split('.');
+                      setCustomAmount(parts.length <= 2 ? val : parts[0] + '.' + parts.slice(1).join(''));
+                    }}
                     placeholder="Enter amount (₹)"
                     className="flex-1 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden text-gray-800 dark:text-slate-100"
                   />

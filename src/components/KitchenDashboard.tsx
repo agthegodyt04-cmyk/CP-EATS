@@ -828,7 +828,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         const conversationId = getConversationId(peer.uid);
         const lastMessage = latestByConversation.get(conversationId) || null;
         const unreadCount = kitchenInboxMessages.filter(
-          (msg) => msg.conversationId === conversationId && msg.senderId !== currentProfile.uid && msg.createdAt > getLastReadAt(peer.uid)
+          (msg) => msg.conversationId === conversationId && msg.senderId !== currentProfile.uid && (msg.createdAt as number) > getLastReadAt(peer.uid)
         ).length;
         return { peer, conversationId, lastMessage, unreadCount };
       })
@@ -837,8 +837,8 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
         return haystack.includes(kitchenInboxMessageFilter.toLowerCase().trim());
       })
       .sort((a, b) => {
-        const ta = a.lastMessage?.createdAt || 0;
-        const tb = b.lastMessage?.createdAt || 0;
+        const ta = Number(a.lastMessage?.createdAt || 0);
+        const tb = Number(b.lastMessage?.createdAt || 0);
         return tb - ta;
       });
   };
@@ -945,7 +945,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background-primary text-text-primary dark:bg-slate-950 dark:text-slate-100 pb-20 font-sans transition-colors duration-200">
+    <div data-testid="kitchen-dashboard" className="flex flex-col min-h-screen bg-background-primary text-text-primary dark:bg-slate-950 dark:text-slate-100 pb-20 font-sans transition-colors duration-200">
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 px-4 py-3 bg-text-primary text-text-inverse text-xs font-semibold rounded-2xl shadow-theme z-50 flex items-center gap-2 animate-scale-up">
@@ -976,6 +976,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
         <div className="flex items-center gap-3">
           <button
+            data-testid="theme-toggle"
             onClick={handleToggleTheme}
             className="p-2 text-text-muted hover:text-brand-primary dark:hover:text-amber-400 transition-colors cursor-pointer"
             title={themePreference === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -988,6 +989,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           </button>
 
           <button
+            data-testid="logout-button"
             onClick={onLogout}
             className="p-2 text-text-muted hover:text-brand-primary transition-colors cursor-pointer"
             title="Log Out"
@@ -1304,9 +1306,14 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                 <div className="relative flex-1">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">₹</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={kitchenMov}
-                    onChange={(e) => setKitchenMov(parseInt(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setKitchenMov(val === '' ? 0 : parseInt(val, 10));
+                    }}
                     className="w-full pl-7 pr-3 py-2 bg-background-primary border border-border-primary rounded-xl text-xs font-mono font-bold text-text-primary focus:outline-hidden focus:ring-2 focus:ring-brand-primary"
                   />
                 </div>
@@ -1342,10 +1349,16 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                 <div className="space-y-1">
                   <label className="text-[10px] font-semibold text-text-muted uppercase">Price (₹)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*"
                     required
                     value={newDishPrice}
-                    onChange={(e) => setNewDishPrice(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, "");
+                      const parts = val.split('.');
+                      setNewDishPrice(parts.length <= 2 ? val : parts[0] + '.' + parts.slice(1).join(''));
+                    }}
                     placeholder="40"
                     className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
                   />
@@ -2580,7 +2593,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
       {/* Footer Navigation Tabs */}
       {!selectedOrderId && (
-        <nav className="fixed bottom-0 inset-x-0 bg-background-secondary/95 backdrop-blur-md border-t border-border-primary p-2 py-3 flex justify-around items-center z-40 shadow-theme">
+        <nav data-testid="nav-kitchen" className="fixed bottom-0 inset-x-0 bg-background-secondary/95 backdrop-blur-md border-t border-border-primary p-2 py-3 flex justify-around items-center z-40 shadow-theme">
           {[
             { id: "orders", label: "Orders", icon: "📋" },
             { id: "menu", label: "Menu", icon: "📖" },
@@ -2590,6 +2603,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           ].map((tab) => (
             <button
               key={tab.id}
+              data-testid={["orders", "menu", "feed"].includes(tab.id) ? `nav-kitchen-${tab.id}` : undefined}
               onClick={() => {
                 setActiveTab(tab.id as any);
                 setSelectedOrderId(null);

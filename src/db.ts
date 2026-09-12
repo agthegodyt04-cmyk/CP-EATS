@@ -58,7 +58,8 @@ export function where(field: string, op: string, value: any) {
 }
 
 export function orderBy(fieldPath: string, directionStr?: string) {
-  const ascending = directionStr === 'asc' || directionStr === undefined || directionStr === 'desc' ? true : false;
+  const direction = typeof directionStr === 'string' ? directionStr.toLowerCase() : undefined;
+  const ascending = directionStr === undefined || direction === 'asc';
   return { type: 'orderBy', field: fieldPath, ascending };
 }
 
@@ -74,45 +75,21 @@ export function buildQuery(collectionRef: any, ...constraints: any[]) {
 }
 
 // ============================================================
-// COLUMN NAME LOCKED: matches supabase-schema.sql quoted camelCase
-// DO NOT MODIFY without also updating supabase-schema.sql
-// Runtime aliases are identity mappings for all camelCase tables.
-// The fallback in resolveColumn passes through any unmapped
-// field unchanged, so unknown columns still resolve as-is.
+// COLUMN NAME LOCKED: matches quoted camelCase columns in schema.
+// DO NOT MODIFY without also updating supabase-schema.sql.
 // ============================================================
-const COLUMN_ALIASES: Record<string, Partial<Record<string, string>>> = {
-  favorites: { userId: 'userId', menuItemId: 'menuItemId', kitchenId: 'kitchenId' },
-  notifications: { userId: 'userId' },
-  follows: { followerId: 'followerId', kitchenId: 'kitchenId' },
-  comments: { postId: 'postId', userId: 'userId', userName: 'userName', userRole: 'userRole', kitchenId: 'kitchenId' },
-  reviews: { orderId: 'orderId', customerId: 'customerId', customerName: 'customerName', kitchenId: 'kitchenId', isHandpicked: 'isHandpicked', taggedItemIds: 'taggedItemIds' },
-  chats: { orderId: 'orderId', senderId: 'senderId', senderName: 'senderName', isUpiCard: 'isUpiCard', qrCodeUrl: 'qrCodeUrl' },
-  kitchen_chats: { conversationId: 'conversationId', senderId: 'senderId', senderName: 'senderName', senderHandle: 'senderHandle', recipientId: 'recipientId', recipientName: 'recipientName', recipientHandle: 'recipientHandle' },
-  address_registry: { flatAddress: 'flatAddress' },
+const COLUMN_ALIASES: Record<string, Partial<Record<string, string>>> = {};
+
+const TABLE_SPECIFIC_ALIASES: Record<string, Partial<Record<string, string>>> = {
   users: { createdAt: 'created_at' },
 };
+
+export { TABLE_SPECIFIC_ALIASES };
 
 export function resolveColumn(table: string, column: string): string {
   if (column === 'id') return column;
   return COLUMN_ALIASES[table]?.[column] || TABLE_SPECIFIC_ALIASES[table]?.[column] || column;
 }
-
-const TABLE_SPECIFIC_ALIASES: Record<string, Partial<Record<string, string>>> = {
-  ...COLUMN_ALIASES,
-  feed_posts: { kitchenId: 'kitchenId', kitchenName: 'kitchenName', createdAt: 'createdAt', hasAiSparkle: 'hasAiSparkle', aiSparkleImposed: 'aiSparkleImposed', taggedItemIds: 'taggedItemIds' },
-  orders: { customerId: 'customerId', customerName: 'customerName', customerPhone: 'customerPhone', customerAddress: 'customerAddress', kitchenId: 'kitchenId', kitchenName: 'kitchenName', subtotal: 'subtotal', total: 'total', deliveryType: 'deliveryType', deliveryPin: 'deliveryPin', createdAt: 'createdAt', scheduledTime: 'scheduledTime' },
-  kitchens: { kitchenId: 'kitchenId', kitchenName: 'kitchenName', profileImageUrl: 'profileImageUrl', ringtoneMode: 'ringtoneMode', ringtoneChoice: 'ringtoneChoice', ringtoneUrl: 'ringtoneUrl', vegType: 'vegType', isOnline: 'isOnline', restingUntil: 'restingUntil', operatingMode: 'operatingMode', deliveryLocations: 'deliveryLocations', customCategories: 'customCategories' },
-  menu_items: { kitchenId: 'kitchenId', imageUrl: 'imageUrl', isGlutenFree: 'isGlutenFree', isNutFree: 'isNutFree', isAvailable: 'isAvailable', postId: 'postId', createdAt: 'createdAt', isVeg: 'isVeg' },
-  comments: { postId: 'postId', userId: 'userId', userName: 'userName', userRole: 'userRole', kitchenId: 'kitchenId', createdAt: 'createdAt' },
-  reviews: { orderId: 'orderId', customerId: 'customerId', customerName: 'customerName', kitchenId: 'kitchenId', isHandpicked: 'isHandpicked', taggedItemIds: 'taggedItemIds', createdAt: 'createdAt' },
-  chats: { orderId: 'orderId', senderId: 'senderId', senderName: 'senderName', isUpiCard: 'isUpiCard', qrCodeUrl: 'qrCodeUrl', createdAt: 'createdAt' },
-  kitchen_chats: { conversationId: 'conversationId', senderId: 'senderId', senderName: 'senderName', senderHandle: 'senderHandle', recipientId: 'recipientId', recipientName: 'recipientName', recipientHandle: 'recipientHandle', createdAt: 'createdAt' },
-  notifications: { userId: 'userId', createdAt: 'createdAt' },
-  favorites: { userId: 'userId', menuItemId: 'menuItemId', kitchenId: 'kitchenId', createdAt: 'createdAt' },
-  follows: { followerId: 'followerId', kitchenId: 'kitchenId', createdAt: 'createdAt' },
-};
-
-export { TABLE_SPECIFIC_ALIASES };
 
 const REVERSE_ALIASES: Record<string, Record<string, string>> = {};
 for (const [table, aliases] of Object.entries(TABLE_SPECIFIC_ALIASES)) {
@@ -230,7 +207,7 @@ export async function updateDoc(ref: any, data: any): Promise<void> {
   const id = ref.id;
   const cleaned: any = {};
   for (const [key, value] of Object.entries(data)) {
-    if (value && typeof value === 'object' && (value as any).__delete === true) {
+    if (typeof value === 'object' && value !== null && (value as any).__delete === true) {
       continue;
     }
     cleaned[key] = value;
