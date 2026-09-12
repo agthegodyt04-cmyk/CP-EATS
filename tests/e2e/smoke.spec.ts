@@ -1,10 +1,10 @@
 import { test, expect } from './fixtures';
 
 test.describe('Smoke Tests', () => {
-  test('should load the application', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/');
-    await expect(authenticatedPage).toHaveTitle(/CP EATS/i);
-    await expect(authenticatedPage.locator('[data-testid="app-landing"]')).toBeVisible();
+  test('should load the application', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveTitle(/CP EATS/i);
+    await expect(page.locator('[data-testid="app-landing"]')).toBeVisible();
   });
 
   test('should toggle theme on customer dashboard', async ({ authenticatedPage }) => {

@@ -42,7 +42,7 @@ function buildMockSession(user: any) {
   };
 }
 
-async function setupMockAuth(page: Page, user: any) {
+async function setupMockAuth(page: Page, user: any, role: 'customer' | 'kitchen') {
   const session = buildMockSession(user);
   const projectRef = new URL(process.env.VITE_SUPABASE_URL || 'https://eqslifnlscywjppcwupn.supabase.co').hostname.split('.')[0];
   const authTokenKey = `sb-${projectRef}-auth-token`;
@@ -66,17 +66,50 @@ async function setupMockAuth(page: Page, user: any) {
       body: JSON.stringify({ user: session.user }),
     });
   });
+
+  // Mock Supabase database reads so e2e runs fully offline. Without this the
+  // boot-time profile query hits the real project with a fake token, 401s,
+  // and the app stays on the loading screen forever.
+  // NOTE: page.route handlers resolve last-registered-first, so the catch-all
+  // must be registered BEFORE the more specific users handler.
+  await page.route('**/rest/v1/**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+
+  await page.route('**/rest/v1/users**', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+      return;
+    }
+    const profile = {
+      id: user.id,
+      email: user.email,
+      name: user.user_metadata.name,
+      role,
+      status: 'approved',
+      phone: '',
+      society: '',
+      flatAddress: '',
+      themePreference: 'light',
+      created_at: new Date().toISOString(),
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(profile),
+    });
+  });
 }
 
 export const test = base.extend<Fixtures>({
   authenticatedPage: async ({ page }, use) => {
-    await setupMockAuth(page, MOCK_CUSTOMER_USER);
+    await setupMockAuth(page, MOCK_CUSTOMER_USER, 'customer');
     await page.goto('/');
     await page.waitForSelector('[data-testid="loading-screen"]', { state: 'hidden', timeout: 15000 }).catch(() => {});
     await use(page);
   },
   kitchenPage: async ({ page }, use) => {
-    await setupMockAuth(page, MOCK_KITCHEN_USER);
+    await setupMockAuth(page, MOCK_KITCHEN_USER, 'kitchen');
     await page.goto('/');
     await page.waitForSelector('[data-testid="loading-screen"]', { state: 'hidden', timeout: 15000 }).catch(() => {});
     await use(page);
