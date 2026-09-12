@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { turso } from './turso';
 
 type Listener = () => void;
 

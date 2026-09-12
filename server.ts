@@ -89,7 +89,7 @@ app.post("/api/verify-image", async (req, res) => {
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
       contents: [imagePart, { text: promptText }],
       config: {
         responseMimeType: "application/json",
