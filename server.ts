@@ -1,4 +1,5 @@
 import express from "express";
+import os from "os";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -172,8 +173,15 @@ async function startServer() {
     console.log("✓ Static files distribution mounted.");
   }
 
-  app.listen(PORT, "192.168.1.10", () => {
-    console.log(`✓ CP-Eats full-stack server running on http://192.168.1.10:${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`✓ CP-Eats full-stack server running on http://localhost:${PORT}`);
+    const lanUrls = Object.values(os.networkInterfaces())
+      .flat()
+      .filter((net): net is os.NetworkInterfaceInfo => !!net && net.family === "IPv4" && !net.internal)
+      .map((net) => `http://${net.address}:${PORT}`);
+    for (const url of lanUrls) {
+      console.log(`  → LAN: ${url}`);
+    }
   });
 }
 
