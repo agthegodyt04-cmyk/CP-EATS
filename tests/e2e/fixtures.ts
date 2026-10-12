@@ -81,6 +81,11 @@ async function setupMockAuth(page: Page, user: any, role: 'customer' | 'kitchen'
       await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
       return;
     }
+    // Supabase requests a single JSON object (via the vnd.pgrst.object Accept
+    // header) for `.single()`/`.maybeSingle()`, and an array for list queries.
+    // Return the matching shape so both work offline.
+    const accept = route.request().headers()['accept'] || '';
+    const wantsSingleObject = accept.includes('vnd.pgrst.object');
     const profile = {
       id: user.id,
       email: user.email,
@@ -96,7 +101,7 @@ async function setupMockAuth(page: Page, user: any, role: 'customer' | 'kitchen'
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(profile),
+      body: JSON.stringify(wantsSingleObject ? profile : [profile]),
     });
   });
 }

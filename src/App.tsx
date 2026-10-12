@@ -2,7 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { signInWithGoogle, signOut, onAuthStateChange, getRedirectResult } from "./supabase";
 import { databaseService } from "./database";
 import { UserProfile } from "./types";
-import { seedInitialData } from "./utils/seeding";
+// Demo seeding moved to supabase/seed-demo-data.sql (run once in the SQL
+// editor). It can no longer run from the client because RLS blocks
+// unauthenticated inserts, which is intentional.
+// import { seedInitialData } from "./utils/seeding";
 import OnboardingView from "./components/OnboardingView";
 import CustomerDashboard from "./components/CustomerDashboard";
 import KitchenDashboard from "./components/KitchenDashboard";
@@ -55,6 +58,10 @@ export default function App() {
       setAppRoute(expectedPath);
     }
   }, [loading, user, profile]);
+
+  // NOTE: Demo seed data is created via seed-demo-data.sql, not from the client.
+// RLS (enabled) intentionally blocks unauthenticated writes, so the old
+// seedInitialData() call here would be rejected. See seed-demo-data.sql.
 
   // Listen to Supabase Auth state
   useEffect(() => {

@@ -175,38 +175,27 @@ describe('DatabaseService', () => {
   });
 
   describe('mapToChatMessage', () => {
-    it('should parse upiCardData from JSON string safely', () => {
+    it('should map basic chat message fields', () => {
       const data = {
         id: 'msg-1',
         orderId: 'order-1',
         senderId: 'user-1',
         senderName: 'John',
         text: 'Hello',
-        isUpiCard: true,
-        upiCardData: JSON.stringify({ upiId: 'upi@id', amount: 10, displayName: 'John' }),
-        qrCodeUrl: '',
         createdAt: '2024-01-01T00:00:00Z',
       };
 
       const result = (db as any).mapToChatMessage(data);
-      expect(result.upiCardData).toEqual({ upiId: 'upi@id', amount: 10, displayName: 'John' });
-    });
-
-    it('should handle malformed upiCardData JSON gracefully', () => {
-      const data = {
-        id: 'msg-1',
-        orderId: 'order-1',
-        senderId: 'user-1',
-        senderName: 'John',
-        text: 'Hello',
-        isUpiCard: true,
-        upiCardData: 'not-valid-json',
-        qrCodeUrl: '',
-        createdAt: '2024-01-01T00:00:00Z',
-      };
-
-      const result = (db as any).mapToChatMessage(data);
-      expect(result.upiCardData).toBeNull();
+      expect(result.id).toBe('msg-1');
+      expect(result.orderId).toBe('order-1');
+      expect(result.senderId).toBe('user-1');
+      expect(result.senderName).toBe('John');
+      expect(result.text).toBe('Hello');
+      expect(typeof result.createdAt).toBe('number');
+      // [UPI removed] mapper no longer reads UPI columns
+      expect(result.isUpiCard).toBeUndefined();
+      expect(result.upiCardData).toBeUndefined();
+      expect(result.qrCodeUrl).toBeUndefined();
     });
   });
 

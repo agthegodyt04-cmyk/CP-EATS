@@ -10,10 +10,6 @@ CREATE TABLE IF NOT EXISTS users (
   myGateId TEXT DEFAULT '',
   myGateScreenshot TEXT,
   status TEXT DEFAULT 'pending',
-  upiId TEXT DEFAULT '',
-  bankName TEXT DEFAULT '',
-  upiDisplayName TEXT DEFAULT '',
-  qrCodeUrl TEXT DEFAULT '',
   securityPin TEXT DEFAULT '',
   themePreference TEXT DEFAULT 'light',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -32,10 +28,6 @@ CREATE TABLE IF NOT EXISTS kitchens (
   isOnline INTEGER DEFAULT 1,
   restingUntil INTEGER,
   operatingMode TEXT DEFAULT 'online',
-  upiId TEXT DEFAULT '',
-  bankName TEXT DEFAULT '',
-  upiDisplayName TEXT DEFAULT '',
-  qrCodeUrl TEXT DEFAULT '',
   cuisineType TEXT DEFAULT '',
   society TEXT,
   flatAddress TEXT,
@@ -150,9 +142,6 @@ CREATE TABLE IF NOT EXISTS chats (
   senderId TEXT NOT NULL,
   senderName TEXT NOT NULL,
   text TEXT DEFAULT '',
-  isUpiCard INTEGER DEFAULT 0,
-  upiCardData TEXT,
-  qrCodeUrl TEXT DEFAULT '',
   createdAt TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

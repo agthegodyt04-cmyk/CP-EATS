@@ -1,7 +1,10 @@
 import express from "express";
 import os from "os";
 import path from "path";
-import { GoogleGenAI, Type } from "@google/genai";
+// #8: Real Gemini moderation is disabled for now. The import is kept for
+// reference — restore it (and the commented block below) + set GEMINI_API_KEY
+// in .env to re-enable the AI Image Shield.
+// import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -13,29 +16,29 @@ const PORT = Number(process.env.PORT || 3000);
 // Increase payload limit to handle base64 images
 app.use(express.json({ limit: "15mb" }));
 
-// Initialize Gemini SDK with telemetry headers
-const apiKey = process.env.GEMINI_API_KEY;
-let ai: GoogleGenAI | null = null;
+// ── AI Image Shield: real Gemini integration DISABLED (#8) ──────────────────
+// The app always uses the offline fallback simulation below, so uploads are
+// never blocked and no GEMINI_API_KEY is required. To re-enable real Gemini
+// moderation: uncomment this block and the one inside /api/verify-image, then
+// set GEMINI_API_KEY in .env.
+//
+// const apiKey = process.env.GEMINI_API_KEY;
+// let ai: GoogleGenAI | null = null;
+// if (apiKey && apiKey !== "MY_GEMINI_API_KEY") {
+//   try {
+//     ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
+//     console.log("✓ Gemini API Client initialized successfully.");
+//   } catch (err) {
+//     console.error("Failed to initialize Gemini API Client:", err);
+//   }
+// } else {
+//   console.warn("⚠️ GEMINI_API_KEY not configured. Running in fallback simulation mode.");
+// }
+let ai: any = null; // stays null while Gemini is disabled -> forces the fallback path
 
-if (apiKey && apiKey !== "MY_GEMINI_API_KEY") {
-  try {
-    ai = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-    console.log("✓ Gemini API Client initialized successfully.");
-  } catch (err) {
-    console.error("Failed to initialize Gemini API Client:", err);
-  }
-} else {
-  console.warn("⚠️ GEMINI_API_KEY is not configured or holds placeholder value. Running in fallback simulation mode.");
-}
-
-// API Route: Real Gemini-powered AI Image Integrity Shield Scanner
+// API Route: AI Image Integrity Shield Scanner.
+// #8: the real Gemini moderation path is preserved but commented out; while
+// disabled we always return the offline fallback simulation.
 app.post("/api/verify-image", async (req, res) => {
   try {
     const { fileName, dataUrl } = req.body;
@@ -44,92 +47,48 @@ app.post("/api/verify-image", async (req, res) => {
       return res.status(400).json({ error: "Missing dataUrl parameter" });
     }
 
-    // Fallback if Gemini client is not initialized or key is missing
-    if (!ai) {
-      console.log("No Gemini API client initialized. Falling back to robust simulation.");
-      const mockResult = runFallbackSimulation(fileName || "image.jpg");
-      return res.json(mockResult);
-    }
-
-    // Parse MIME type and base64 data out of the data URL
-    const mimeMatch = dataUrl.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
-    if (!mimeMatch) {
-      return res.status(400).json({ error: "Invalid dataUrl format" });
-    }
-
-    const mimeType = mimeMatch[1];
-    const base64Data = mimeMatch[2];
-
-    const imagePart = {
-      inlineData: {
-        mimeType: mimeType,
-        data: base64Data,
-      },
-    };
-
-    const promptText = `
-      You are the CP-Eats AI Image Shield Scanner, an expert automated moderation and food photography verification model.
-      Analyze the attached image and verify whether it is a real, authentic, resident-captured photo of food/cooking.
-
-      Your objective is to enforce community trust guidelines:
-      1. APPROVE (isApproved = true):
-         - Clean, real, organic, home-cooked food plates.
-         - Actual photos taken inside home kitchens or dining rooms with natural/home lighting.
-         - Slightly imperfect but honest plating.
-      2. REJECT (isApproved = false, high chance of strike):
-         - Stock photographs (studio lighting, perfect commercial styling, glossy/polished look, watermarks).
-         - Clip art, vector graphics, icons, cartoons, drawings, or line art.
-         - Internet screenshots, restaurant menus, or marketing flyers.
-         - Images that have nothing to do with food (such as pets, vehicles, random scenery, documents).
-
-      Provide a strict, step-by-step reasoning logs (4 to 6 items) inside the "analysis" array, styled as secure console messages.
-      Example: "✓ Analyzing noise coefficients...", "✓ Natural house lighting and organic textures identified.", "✓ Verified as authentic resident-captured cuisine."
-      
-      Output exactly in JSON following the required schema.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
-      contents: [imagePart, { text: promptText }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isApproved: {
-              type: Type.BOOLEAN,
-              description: "Whether the image is approved as an authentic community capture.",
+    ////////////////////////////////////////////////////////////////////////////
+    // REAL GEMINI SCAN — DISABLED (#8). Uncomment + set GEMINI_API_KEY to use.
+    // (Full prompt text is preserved in git history.)
+    ////////////////////////////////////////////////////////////////////////////
+    /*
+    if (ai) {
+      const mimeMatch = dataUrl.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+      if (!mimeMatch) {
+        return res.status(400).json({ error: "Invalid dataUrl format" });
+      }
+      const mimeType = mimeMatch[1];
+      const base64Data = mimeMatch[2];
+      const imagePart = { inlineData: { mimeType, data: base64Data } };
+      const promptText = `You are the CP-Eats AI Image Shield Scanner... (full prompt in git history)`;
+      const response = await ai.models.generateContent({
+        model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
+        contents: [imagePart, { text: promptText }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              isApproved: { type: Type.BOOLEAN },
+              score: { type: Type.INTEGER },
+              analysis: { type: Type.ARRAY, items: { type: Type.STRING } },
+              strikesAdded: { type: Type.INTEGER },
             },
-            score: {
-              type: Type.INTEGER,
-              description: "Integrity score from 0 to 100.",
-            },
-            analysis: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "A list of 4-6 step-by-step diagnostic logging messages.",
-            },
-            strikesAdded: {
-              type: Type.INTEGER,
-              description: "Number of strikes added to the resident profile (0 for approved, 1 for rejected/violations).",
-            },
+            required: ["isApproved", "score", "analysis", "strikesAdded"],
           },
-          required: ["isApproved", "score", "analysis", "strikesAdded"],
         },
-      },
-    });
-
-    if (response.text) {
-      try {
-        const result = JSON.parse(response.text.trim());
-        console.log("✓ Gemini scan complete for:", fileName, result);
-        return res.json(result);
-      } catch (jsonErr) {
-        console.error("Gemini output was not valid JSON:", response.text, jsonErr);
+      });
+      if (response.text) {
+        try {
+          return res.json(JSON.parse(response.text.trim()));
+        } catch (jsonErr) {
+          console.error("Gemini output was not valid JSON:", response.text, jsonErr);
+        }
       }
     }
+    */
 
-    // Safe fallback if parsing failed
+    // Offline fallback simulation (always used while Gemini is disabled).
     return res.json(runFallbackSimulation(fileName || "image.jpg"));
   } catch (err) {
     console.error("Error in /api/verify-image:", err);
@@ -167,13 +126,15 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    // Express 5 uses path-to-regexp v8, where a bare "*" is invalid and throws
+    // at boot. The named wildcard "/*splat" is the supported SPA fallback.
+    app.get("/*splat", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
     console.log("✓ Static files distribution mounted.");
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`✓ CP-Eats full-stack server running on http://localhost:${PORT}`);
     const lanUrls = Object.values(os.networkInterfaces())
       .flat()

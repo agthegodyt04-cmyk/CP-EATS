@@ -21,7 +21,15 @@ export default function AdminPanel({ currentProfile }: AdminPanelProps) {
       const usersSnap = await getDocs(collection(db, "users"));
       const usersList: UserProfile[] = [];
       usersSnap.forEach((doc) => {
-        usersList.push({ ...doc.data() } as UserProfile);
+        // Raw Supabase rows expose `id`/`name`; the app uses `uid`/`displayName`.
+        // Normalize here so the table renders names and the verify/ban actions
+        // target a real user id (previously they were undefined -> no-op).
+        const raw = doc.data() as Record<string, any>;
+        usersList.push({
+          ...raw,
+          uid: raw.uid || raw.id || doc.id,
+          displayName: raw.displayName || raw.name || "User",
+        } as UserProfile);
       });
       setUsers(usersList);
 

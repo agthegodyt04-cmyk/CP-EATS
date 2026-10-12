@@ -44,10 +44,6 @@ class DatabaseService {
     };
 
     // Only add optional fields if they exist
-    if (user.upiId !== undefined) userData.upiId = user.upiId;
-    if (user.bankName !== undefined) userData.bankName = user.bankName;
-    if (user.upiDisplayName !== undefined) userData.upiDisplayName = user.upiDisplayName;
-    if (user.qrCodeUrl !== undefined) userData.qrCodeUrl = user.qrCodeUrl;
     if (user.securityPin !== undefined) userData.securityPin = user.securityPin;
     if (user.handle !== undefined) userData.handle = user.handle;
     if (user.profileImageUrl !== undefined) userData.profileImageUrl = user.profileImageUrl;
@@ -68,10 +64,6 @@ class DatabaseService {
       myGateId: updates.myGateId,
       myGateScreenshot: updates.myGateScreenshot,
       status: updates.status,
-      upiId: updates.upiId,
-      bankName: updates.bankName,
-      upiDisplayName: updates.upiDisplayName,
-      qrCodeUrl: updates.qrCodeUrl,
       securityPin: updates.securityPin,
       handle: updates.handle,
       profileImageUrl: updates.profileImageUrl,
@@ -128,10 +120,6 @@ class DatabaseService {
       isOnline: kitchen.isOnline,
       restingUntil: kitchen.restingUntil,
       operatingMode: kitchen.operatingMode,
-      upiId: kitchen.upiId,
-      bankName: kitchen.bankName,
-      upiDisplayName: kitchen.upiDisplayName,
-      qrCodeUrl: kitchen.qrCodeUrl,
       cuisineType: kitchen.cuisineType,
       society: kitchen.society,
       flatAddress: kitchen.flatAddress,
@@ -155,10 +143,6 @@ class DatabaseService {
       isOnline: updates.isOnline,
       restingUntil: updates.restingUntil,
       operatingMode: updates.operatingMode,
-      upiId: updates.upiId,
-      bankName: updates.bankName,
-      upiDisplayName: updates.upiDisplayName,
-      qrCodeUrl: updates.qrCodeUrl,
       cuisineType: updates.cuisineType,
       society: updates.society,
       flatAddress: updates.flatAddress,
@@ -509,9 +493,6 @@ class DatabaseService {
       senderId: message.senderId,
       senderName: message.senderName,
       text: message.text,
-      isUpiCard: message.isUpiCard,
-      upiCardData: message.upiCardData,
-      qrCodeUrl: message.qrCodeUrl,
       createdAt: new Date(message.createdAt).toISOString()
     }]));
     if (error) throw error;
@@ -615,10 +596,6 @@ class DatabaseService {
       myGateId: data.myGateId || '',
       myGateScreenshot: data.myGateScreenshot,
       status: data.status || 'pending',
-      upiId: data.upiId,
-      bankName: data.bankName,
-      upiDisplayName: data.upiDisplayName,
-      qrCodeUrl: data.qrCodeUrl,
       securityPin: data.securityPin,
       themePreference: data.themePreference,
       createdAt: data.created_at ? new Date(data.created_at).getTime() : Date.now()
@@ -639,10 +616,6 @@ class DatabaseService {
       isOnline: data.isOnline !== false,
       restingUntil: data.restingUntil,
       operatingMode: data.operatingMode || 'online',
-      upiId: data.upiId || '',
-      bankName: data.bankName || '',
-      upiDisplayName: data.upiDisplayName || '',
-      qrCodeUrl: data.qrCodeUrl || '',
       cuisineType: data.cuisineType || '',
       society: data.society,
       flatAddress: data.flatAddress,
@@ -718,9 +691,6 @@ class DatabaseService {
       senderId: data.senderId,
       senderName: data.senderName,
       text: data.text,
-      isUpiCard: data.isUpiCard === true,
-      upiCardData: typeof data.upiCardData === 'string' ? (() => { try { return JSON.parse(data.upiCardData); } catch { return null; } })() : data.upiCardData,
-      qrCodeUrl: data.qrCodeUrl,
       createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now()
     };
   }

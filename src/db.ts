@@ -207,6 +207,9 @@ export async function updateDoc(ref: any, data: any): Promise<void> {
   const cleaned: any = {};
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === 'object' && value !== null && (value as any).__delete === true) {
+      // deleteField() must actually clear the column. Previously these keys were
+      // dropped, turning every "hard delete" into a silent no-op.
+      cleaned[key] = null;
       continue;
     }
     cleaned[key] = value;

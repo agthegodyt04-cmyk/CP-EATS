@@ -8,15 +8,12 @@ interface ChatProps {
   senderId: string;
   senderName: string;
   isKitchenView: boolean;
-  onSendUpiRequest?: (amount: number) => void;
 }
 
-export default function Chat({ orderId, senderId, senderName, isKitchenView, onSendUpiRequest }: ChatProps) {
+export default function Chat({ orderId, senderId, senderName, isKitchenView }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [customAmount, setCustomAmount] = useState("");
-  const [showUpiCreator, setShowUpiCreator] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
   const [enlargedUpiData, setEnlargedUpiData] = useState<{ upiId: string; displayName?: string; amount?: number } | null>(null);
@@ -59,57 +56,7 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
     const messageText = newMessage.trim();
     if (!messageText) return;
 
-    if (messageText.toUpperCase() === "/UPI") {
-      if (!isKitchenView) {
-        // Customers cannot use UPI sharing features
-        return;
-      }
-      try {
-        let upiIdToUse = "";
-        let displayNameToUse = "";
-        let bankNameToUse = "";
-        let qrCodeUrlToUse = "";
-
-        // Fetch from kitchens collection
-        const docSnap = await getDoc(doc(db, "kitchens", senderId));
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          upiIdToUse = data.upiId || "";
-          displayNameToUse = data.upiDisplayName || data.kitchenName || senderName;
-          bankNameToUse = data.bankName || "";
-          qrCodeUrlToUse = data.qrCodeUrl || "";
-        }
-
-        // If no saved info, nothing happens!
-        if (!upiIdToUse && !qrCodeUrlToUse) {
-          return;
-        }
-
-        // Send a custom card message
-        const messageId = "chat_" + Date.now();
-        await setDoc(doc(db, "chats", messageId), {
-          id: messageId,
-          orderId,
-          senderId,
-          senderName,
-          text: `Shared UPI Details & QR Code`,
-          isUpiCard: true,
-          upiCardData: {
-            upiId: upiIdToUse,
-            amount: 0, // 0 for general sharing
-            displayName: displayNameToUse,
-            bankName: bankNameToUse || "Personal Payout"
-          },
-          qrCodeUrl: qrCodeUrlToUse || "",
-          createdAt: new Date().toISOString()
-        });
-        setNewMessage("");
-        return;
-      } catch (err) {
-        console.error("Failed to fetch and send /UPI card:", err);
-      }
-    }
-
+    // [UPI REMOVED] "/UPI" command trigger stripped — no card can ever be created.
     try {
       const messageId = "chat_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
       await setDoc(doc(db, "chats", messageId), {
@@ -123,16 +70,6 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
       setNewMessage("");
     } catch (err) {
       console.error("Failed to send message:", err);
-    }
-  };
-
-  const triggerUpiRequest = () => {
-    const amt = parseFloat(customAmount);
-    if (isNaN(amt) || amt <= 0) return;
-    if (onSendUpiRequest) {
-      onSendUpiRequest(amt);
-      setCustomAmount("");
-      setShowUpiCreator(false);
     }
   };
 
@@ -150,45 +87,7 @@ export default function Chat({ orderId, senderId, senderName, isKitchenView, onS
           <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
           <h3 className="font-semibold text-gray-800 dark:text-slate-200 text-sm">Direct Order Chat</h3>
         </div>
-        {isKitchenView && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowUpiCreator(!showUpiCreator)}
-              className="w-8 h-8 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-black transition-all shadow-xs cursor-pointer"
-              title="Request Payment"
-            >
-              <span>₹</span>
-            </button>
-            {showUpiCreator && (
-              <div className="absolute right-0 top-10 w-64 p-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl shadow-lg z-50">
-                <p className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Create UPI Request Card</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9]*"
-                    value={customAmount}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, "");
-                      const parts = val.split('.');
-                      setCustomAmount(parts.length <= 2 ? val : parts[0] + '.' + parts.slice(1).join(''));
-                    }}
-                    placeholder="Enter amount (₹)"
-                    className="flex-1 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden text-gray-800 dark:text-slate-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={triggerUpiRequest}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* [UPI REMOVED] Request-Payment ₹ button + amount popover stripped */}
       </div>
 
       {/* Messages Feed */}

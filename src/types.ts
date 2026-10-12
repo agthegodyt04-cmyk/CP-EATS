@@ -13,10 +13,6 @@ export interface UserProfile {
   myGateId: string;
   myGateScreenshot?: string;
   status: "pending" | "verified" | "banned" | "Pending_Verification";
-  upiId?: string;
-  bankName?: string;
-  upiDisplayName?: string;
-  qrCodeUrl?: string;
   securityPin?: string;
   themePreference?: "light" | "dark";
   createdAt: number | string;
@@ -35,10 +31,11 @@ export interface KitchenDetails {
   isOnline: boolean;
   restingUntil: number | null; // Epoch millisecond time when they are back
   operatingMode: "online" | "break" | "day_off" | "vacation";
-  upiId: string;
-  bankName: string;
-  upiDisplayName: string;
-  qrCodeUrl: string; // Base64 data URL
+  // FOSSIL (UPI removed): kept optional so dead UPI code compiles — never populated.
+  upiId?: string;
+  bankName?: string;
+  upiDisplayName?: string;
+  qrCodeUrl?: string;
   cuisineType: string;
   society?: string;
   flatAddress?: string;
@@ -150,6 +147,7 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   text: string;
+  // FOSSIL (UPI removed): kept optional so legacy card-render code compiles — never populated.
   isUpiCard?: boolean;
   upiCardData?: {
     upiId: string;
@@ -186,4 +184,5 @@ export interface Review {
   createdAt: number;
   isHandpicked?: boolean; // Featured/handpicked review on kitchen's profile wall
   taggedItemIds?: string[]; // IDs of menu items mentioned or tagged in this review
+  isVerifiedHandshake?: boolean; // Review posted after the delivery PIN handshake
 }

@@ -180,12 +180,45 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   const currentKitchenPin = kitchenDetails?.securityPin || currentProfile.securityPin || "";
 
-  const requestKitchenPin = (_reason: string) => {
-    return true;
+  // Security PIN challenge modal state (see requestKitchenPin below).
+  const [pinPrompt, setPinPrompt] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
+  const [pinInputValue, setPinInputValue] = useState("");
+  const [pinInputError, setPinInputError] = useState("");
+  const pinPromptRef = React.useRef<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
+
+  // Resolves to true when the protected action may proceed. If the kitchen never
+  // configured a PIN there is nothing to verify against, so the action is allowed.
+  const requestKitchenPin = (reason: string): Promise<boolean> => {
+    if (!currentKitchenPin) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      const prompt = { reason, resolve };
+      pinPromptRef.current = prompt;
+      setPinInputValue("");
+      setPinInputError("");
+      setPinPrompt(prompt);
+    });
+  };
+
+  const resolvePinPrompt = (ok: boolean) => {
+    const prompt = pinPromptRef.current;
+    pinPromptRef.current = null;
+    setPinPrompt(null);
+    setPinInputValue("");
+    setPinInputError("");
+    prompt?.resolve(ok);
+  };
+
+  const submitPinPrompt = () => {
+    if (!pinPrompt) return;
+    if (pinInputValue.trim() === currentKitchenPin) {
+      resolvePinPrompt(true);
+    } else {
+      setPinInputError("Incorrect PIN. Please try again.");
+    }
   };
 
   const protectedUpdate = async (reason: string, action: () => Promise<void>) => {
-    if (!requestKitchenPin(reason)) return false;
+    if (!(await requestKitchenPin(reason))) return false;
     await action();
     return true;
   };
@@ -353,7 +386,8 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
       console.error("Failed to sync notifications:", err);
     });
 
-    const qPeers = buildQuery(collection(db, "users"), where("role", "==", "kitchen"), limit(50));
+    // Read peers from the secret-free projection (users table is self+admin only).
+    const qPeers = buildQuery(collection(db, "public_profiles"), where("role", "==", "kitchen"), limit(50));
     const unsubPeers = onSnapshot(qPeers, (snap) => {
       const list: (UserProfile & { kitchenName?: string })[] = [];
       snap.forEach((d) => {
@@ -459,7 +493,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
     if (!newDishName.trim() || isNaN(price) || price <= 0) return;
 
     try {
-      if (!requestKitchenPin("Add a new menu item?")) return;
+      if (!(await requestKitchenPin("Add a new menu item?"))) return;
       const newItemId = "menu_" + Date.now();
       await setDoc(doc(db, "menu_items", newItemId), {
         id: newItemId,
@@ -492,7 +526,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   // Toggle dish availability
   const toggleAvailability = async (item: MenuItem) => {
     try {
-      if (!requestKitchenPin(`Toggle availability for "${item.name}"?`)) return;
+      if (!(await requestKitchenPin(`Toggle availability for "${item.name}"?`))) return;
       // Find the document to update. We used addDoc so we need to query by id
       const q = buildQuery(collection(db, "menu_items"), where("id", "==", item.id));
       const snap = await getDocs(q);
@@ -509,7 +543,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   const handleDeleteDish = async (itemId: string) => {
     if (!window.confirm("Are you sure you want to remove this dish from your kitchen menu?")) return;
     try {
-      if (!requestKitchenPin("Delete this menu item permanently?")) return;
+      if (!(await requestKitchenPin("Delete this menu item permanently?"))) return;
       const q = buildQuery(collection(db, "menu_items"), where("id", "==", itemId));
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -578,7 +612,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   const handleSaveUpiProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (!requestKitchenPin("Save or wipe UPI payment settings?")) return;
+      if (!(await requestKitchenPin("Save or wipe UPI payment settings?"))) return;
       const updateData = hardDeleteUpi ? {
         upiId: deleteField(),
         bankName: deleteField(),
@@ -667,7 +701,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   // Handle feed post creation
   const handlePublishFeedPost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!requestKitchenPin("Publish this kitchen feed post?")) return;
+    if (!(await requestKitchenPin("Publish this kitchen feed post?"))) return;
 
     if (!postImageBase64 || !imageApproved) return;
 
@@ -705,7 +739,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this social feed post?")) return;
     try {
-      if (!requestKitchenPin("Delete this feed post permanently?")) return;
+      if (!(await requestKitchenPin("Delete this feed post permanently?"))) return;
       const q = buildQuery(collection(db, "feed_posts"), where("id", "==", postId));
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -739,7 +773,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
 
   const handleUpdateFeedPost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingPostId || !requestKitchenPin("Save changes to this post?")) return;
+    if (!editingPostId || !(await requestKitchenPin("Save changes to this post?"))) return;
     if (!postImageBase64 || !imageApproved) return;
 
     const taggedItems = myItems.filter(mi => postTaggedItemIds.includes(mi.id));
@@ -850,7 +884,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
     if (!recipient || !text) return;
 
     try {
-      if (!requestKitchenPin("Send this kitchen-to-kitchen message?")) return;
+      if (!(await requestKitchenPin("Send this kitchen-to-kitchen message?"))) return;
       const conversationId = [currentProfile.uid, recipient.uid].sort().join("__");
       const messageId = `kdm_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       await setDoc(doc(db, "kitchen_chats", messageId), {
@@ -932,7 +966,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
       return;
     }
 
-    if (!requestKitchenPin("Save kitchen food type changes?")) return;
+    if (!(await requestKitchenPin("Save kitchen food type changes?"))) return;
 
     try {
       await updateDoc(doc(db, "kitchens", currentProfile.uid), { vegType: nextType });
@@ -1272,15 +1306,14 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                   </div>
                 )}
 
-                {/* Coordination Chat & Request Payment */}
+                {/* Coordination Chat */}
                 <div className="space-y-2">
-                  <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest pl-2">Customer Conversation & billing</h3>
+                  <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest pl-2">Customer Conversation</h3>
                   <Chat
                     orderId={ord.id}
                     senderId={currentProfile.uid}
                     senderName={kitchenDetails?.kitchenName || currentProfile.displayName}
                     isKitchenView={true}
-                    onSendUpiRequest={handleSendBillingRequest}
                   />
                 </div>
               </div>
@@ -1990,12 +2023,12 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
           </div>
         )}
 
-        {/* TAB 5: Kitchen settings, UPI, and operations */}
+        {/* TAB 5: Kitchen settings and operations */}
         {activeTab === "settings" && (
           <div className="space-y-6">
             <div className="text-center py-2">
               <h2 className="text-xl font-extrabold tracking-tight text-text-primary">Operating Profile</h2>
-              <p className="text-xs text-text-muted">Manage payment coordinates and operational schedules</p>
+              <p className="text-xs text-text-muted">Manage your operational schedules</p>
             </div>
 
             {/* Kitchen Creator Profile */}
@@ -2299,119 +2332,9 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
               </div>
             </div>
 
-            {/* UPI configurations Form */}
-            <form onSubmit={handleSaveUpiProfile} className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4">
-              <h3 className="text-xs font-extrabold text-text-muted uppercase tracking-widest flex items-center gap-1.5">
-                <Settings className="w-4 h-4 text-brand-primary" />
-                <span>UPI Payment Configuration</span>
-              </h3>
+            {/* [UPI REMOVED] UPI Payment Configuration form stripped */}
 
-              <p className="text-[10px] text-text-muted leading-relaxed font-semibold">
-                Configure your peer payment destination. Customers will copy these credentials in chat to settle orders. Toggle on the Hard Delete button to instantly wipe all payment details from the database.
-              </p>
 
-              <div className="space-y-3.5 text-xs">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-text-muted uppercase">UPI Handle / ID</label>
-                  <input
-                    type="text"
-                    required={!hardDeleteUpi}
-                    disabled={hardDeleteUpi}
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    placeholder="e.g. chefname@upi"
-                    className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg font-mono focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase">Beneficiary Display Name</label>
-                  <input
-                    type="text"
-                    required={!hardDeleteUpi}
-                    disabled={hardDeleteUpi}
-                    value={upiDisplayName}
-                    onChange={(e) => setUpiDisplayName(e.target.value)}
-                    placeholder="e.g. Simranjeet Kaur"
-                    className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase">Bank Name</label>
-                  <input
-                    type="text"
-                    required={!hardDeleteUpi}
-                    disabled={hardDeleteUpi}
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder="e.g. HDFC Bank"
-                    className="w-full px-3 py-2 bg-background-primary border border-border-primary text-text-primary rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase">Save QR Code Image (Pic)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={hardDeleteUpi}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const base64 = await compressImage(file);
-                        setQrCodeUrl(base64);
-                        showToast("QR Code picture loaded! 📸 Click Save Payout Settings below to finalize.");
-                      } catch (err) {
-                        console.error("QR upload error:", err);
-                        showToast("Failed to upload/compress QR Code.");
-                      }
-                    }}
-                    className="w-full text-xs text-text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-primary-container file:text-brand-primary hover:file:bg-brand-primary/20 cursor-pointer"
-                  />
-                  {qrCodeUrl && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <img src={qrCodeUrl} alt="QR Code" className="w-16 h-16 object-cover border border-border-primary rounded-lg" referrerPolicy="no-referrer" />
-                      <button
-                        type="button"
-                        onClick={() => setQrCodeUrl("")}
-                        className="text-rose-500 text-[10px] font-bold hover:underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-border-primary flex items-center justify-between">
-                  <div className="space-y-0.5 pr-4">
-                    <p className="text-[10px] font-bold text-rose-600 uppercase">Hard Wipe Payment Profiles</p>
-                    <p className="text-[9px] text-text-muted font-semibold">Permanently hard-delete all payment settings.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setHardDeleteUpi(!hardDeleteUpi)}
-                    className="p-1 text-rose-500 hover:scale-110 transition-transform cursor-pointer shrink-0"
-                  >
-                     {hardDeleteUpi ? (
-                       <ToggleRight className="w-10 h-10 text-rose-500 fill-current animate-pulse" />
-                     ) : (
-                       <ToggleLeft className="w-10 h-10 text-text-muted" />
-                     )}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className={`w-full py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
-                  hardDeleteUpi ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-brand-primary hover:bg-brand-primary/90 text-white"
-                }`}
-              >
-                {hardDeleteUpi ? "Confirm Hard Wipe Details" : "Save Payout Profile"}
-              </button>
-            </form>
 
             {/* Resident ratings review stats */}
             <div className="p-5 bg-background-secondary border border-border-primary rounded-3xl shadow-theme space-y-4">
@@ -2471,7 +2394,7 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                   const nextType = pendingVegType;
                   setPendingVegType(null);
                   if (!nextType) return;
-                  if (!requestKitchenPin("Confirm irreversible food type upgrade?")) return;
+                  if (!(await requestKitchenPin("Confirm irreversible food type upgrade?"))) return;
                   try {
                     await updateDoc(doc(db, "kitchens", currentProfile.uid), { vegType: nextType });
                     setKitchenVegType(nextType);
@@ -2586,6 +2509,58 @@ export default function KitchenDashboard({ currentProfile, onLogout }: KitchenDa
                   Accept & Prepare ✅
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kitchen Security PIN challenge modal (see requestKitchenPin) */}
+      {pinPrompt && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-background-secondary border border-border-primary shadow-2xl p-5 space-y-4 animate-scale-up">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-brand-primary" />
+              <h3 className="text-sm font-black text-text-primary uppercase tracking-wider">Kitchen Security PIN</h3>
+            </div>
+            <p className="text-xs text-text-secondary leading-relaxed">{pinPrompt.reason}</p>
+            <input
+              autoFocus
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={pinInputValue}
+              onChange={(e) => {
+                setPinInputValue(e.target.value.replace(/\D/g, "").slice(0, 4));
+                if (pinInputError) setPinInputError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitPinPrompt();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  resolvePinPrompt(false);
+                }
+              }}
+              placeholder="••••"
+              className="w-full text-center text-lg tracking-[0.5em] font-black px-4 py-3 rounded-2xl border border-border-primary bg-background-primary text-text-primary focus:border-brand-primary focus:outline-none"
+            />
+            {pinInputError && <p className="text-[11px] text-rose-500 font-semibold">{pinInputError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => resolvePinPrompt(false)}
+                className="flex-1 py-2.5 rounded-xl border border-border-primary text-text-secondary text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitPinPrompt}
+                className="flex-1 py-2.5 rounded-xl bg-brand-primary text-white text-xs font-black cursor-pointer"
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </div>

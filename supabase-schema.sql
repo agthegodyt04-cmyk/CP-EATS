@@ -22,10 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
   "myGateId" TEXT DEFAULT '',
   "myGateScreenshot" TEXT,
   status TEXT DEFAULT 'pending',
-  "upiId" TEXT,
-  "bankName" TEXT,
-  "upiDisplayName" TEXT,
-  "qrCodeUrl" TEXT,
   "securityPin" TEXT,
   handle TEXT DEFAULT '',
   "profileImageUrl" TEXT DEFAULT '',
@@ -46,16 +42,13 @@ CREATE TABLE IF NOT EXISTS kitchens (
   "isOnline" BOOLEAN DEFAULT TRUE,
   "restingUntil" TEXT,
   "operatingMode" TEXT DEFAULT 'online',
-  "upiId" TEXT,
-  "bankName" TEXT,
-  "upiDisplayName" TEXT,
-  "qrCodeUrl" TEXT,
   "cuisineType" TEXT DEFAULT '',
   society TEXT,
   "flatAddress" TEXT,
   "deliveryLocations" JSONB DEFAULT '[]',
   "securityPin" TEXT,
-  "customCategories" TEXT[] DEFAULT '{}'
+  "customCategories" TEXT[] DEFAULT '{}',
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS menu_items (
@@ -81,9 +74,7 @@ CREATE TABLE IF NOT EXISTS feed_posts (
   description TEXT DEFAULT '',
   "imageUrl" TEXT,
   likes TEXT[] DEFAULT '{}',
-  "taggedItemId" TEXT,
-  "taggedItemName" TEXT,
-  "taggedItemPrice" REAL,
+  "taggedItemIds" TEXT[] DEFAULT '{}',
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   "hasAiSparkle" BOOLEAN DEFAULT FALSE,
   "aiSparkleImposed" BOOLEAN DEFAULT FALSE
@@ -147,7 +138,8 @@ CREATE TABLE IF NOT EXISTS reviews (
   comment TEXT DEFAULT '',
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   "isHandpicked" BOOLEAN DEFAULT FALSE,
-  "taggedItemIds" JSONB DEFAULT '[]'
+  "taggedItemIds" JSONB DEFAULT '[]',
+  "isVerifiedHandshake" BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -164,16 +156,13 @@ CREATE TABLE IF NOT EXISTS chats (
   "senderId" TEXT NOT NULL,
   "senderName" TEXT NOT NULL,
   text TEXT NOT NULL,
-  "isUpiCard" BOOLEAN DEFAULT FALSE,
-  "upiCardData" JSONB,
-  "qrCodeUrl" TEXT,
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS kitchen_chats (
   id TEXT PRIMARY KEY,
   "conversationId" TEXT NOT NULL,
-  participants JSONB NOT NULL DEFAULT '[]',
+  participants TEXT[] NOT NULL DEFAULT '{}',
   "senderId" TEXT NOT NULL,
   "senderName" TEXT NOT NULL,
   "senderHandle" TEXT DEFAULT '',
@@ -206,10 +195,6 @@ CREATE TABLE IF NOT EXISTS handle_registry (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "flatAddress" TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "myGateId" TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "myGateScreenshot" TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS "upiId" TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS "bankName" TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS "upiDisplayName" TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS "qrCodeUrl" TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "securityPin" TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS handle TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "profileImageUrl" TEXT DEFAULT '';
@@ -226,10 +211,6 @@ ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS mov INTEGER DEFAULT 100;
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "isOnline" BOOLEAN DEFAULT TRUE;
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "restingUntil" TEXT;
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "operatingMode" TEXT DEFAULT 'online';
-ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "upiId" TEXT;
-ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "bankName" TEXT;
-ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "upiDisplayName" TEXT;
-ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "qrCodeUrl" TEXT;
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "cuisineType" TEXT DEFAULT '';
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS society TEXT;
 ALTER TABLE kitchens ADD COLUMN IF NOT EXISTS "flatAddress" TEXT;
@@ -306,9 +287,6 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TI
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS "orderId" TEXT;
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS "senderId" TEXT;
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS "senderName" TEXT;
-ALTER TABLE chats ADD COLUMN IF NOT EXISTS "isUpiCard" BOOLEAN DEFAULT FALSE;
-ALTER TABLE chats ADD COLUMN IF NOT EXISTS "upiCardData" JSONB;
-ALTER TABLE chats ADD COLUMN IF NOT EXISTS "qrCodeUrl" TEXT;
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 ALTER TABLE kitchen_chats ADD COLUMN IF NOT EXISTS "conversationId" TEXT;
@@ -324,6 +302,15 @@ ALTER TABLE kitchen_chats ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TI
 ALTER TABLE address_registry ADD COLUMN IF NOT EXISTS "flatAddress" TEXT;
 ALTER TABLE address_registry ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE handle_registry ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- Columns used by the app that may be missing from an older live database.
+ALTER TABLE chats          ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+ALTER TABLE comments       ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+ALTER TABLE notifications  ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+ALTER TABLE kitchen_chats  ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+ALTER TABLE kitchens       ADD COLUMN IF NOT EXISTS "customCategories" TEXT[] DEFAULT '{}';
+ALTER TABLE kitchens       ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE reviews        ADD COLUMN IF NOT EXISTS "isVerifiedHandshake" BOOLEAN DEFAULT FALSE;
 
 -- If earlier setup used unquoted camelCase, Postgres created lowercase columns
 -- such as kitchenname/kitchenid. They can block new writes if still NOT NULL.

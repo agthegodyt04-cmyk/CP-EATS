@@ -23,10 +23,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "flatAddress" TEXT DEFAULT '';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "myGateId" TEXT DEFAULT '';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "myGateScreenshot" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "upiId" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "bankName" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "upiDisplayName" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "qrCodeUrl" TEXT;
+-- [UPI REMOVED] users UPI columns dropped
 
 -- Force Supabase/PostgREST to refresh its cached table columns immediately.
 NOTIFY pgrst, 'reload schema';
@@ -47,10 +44,6 @@ WHERE table_schema = 'public'
     'flatAddress',
     'myGateId',
     'myGateScreenshot',
-    'status',
-    'upiId',
-    'bankName',
-    'upiDisplayName',
-    'qrCodeUrl'
+    'status'
   )
 ORDER BY column_name;

@@ -311,9 +311,9 @@ export default function CustomerDashboard({ currentProfile, onLogout, onOpenAdmi
       return 0;
     };
 
-    // 1. Fetch kitchens and associate their societies and flat addresses from user profiles
+    // 1. Fetch kitchen profiles (secret-free projection) to associate societies with kitchens
     // Supabase rows use `id`; app types use `uid`. Normalize both so directory/feed matching works.
-    const qKitchenProfiles = buildQuery(collection(db, "users"), where("role", "==", "kitchen"), where("status", "==", "verified"));
+    const qKitchenProfiles = buildQuery(collection(db, "public_profiles"), where("role", "==", "kitchen"), where("status", "==", "verified"));
     let unsubDetails: (() => void) | null = null;
     const unsubKitchens = onSnapshot(qKitchenProfiles, (pSnap) => {
       const societiesMap: Record<string, string> = {};

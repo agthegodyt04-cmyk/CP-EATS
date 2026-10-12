@@ -34,10 +34,6 @@ export async function seedInitialData() {
         isOnline: true,
         restingUntil: null,
         operatingMode: "online",
-        upiId: "simran@upi",
-        bankName: "HDFC Bank",
-        upiDisplayName: "Simranjeet Kaur",
-        qrCodeUrl: "",
         cuisineType: "North Indian, Punjabi Delicacies",
         society: "Centurian Park - O2 Valley",
         flatAddress: "Centurian Park - O2 Valley, Tower F-18, Floor 4, Flat 04",
@@ -53,10 +49,6 @@ export async function seedInitialData() {
         isOnline: true,
         restingUntil: null,
         operatingMode: "online",
-        upiId: "auntietiffin@upi",
-        bankName: "State Bank of India",
-        upiDisplayName: "Laxmi Swaminathan",
-        qrCodeUrl: "",
         cuisineType: "South Indian, Fresh Idli & Dosa",
         society: "Centurian Park - Low Rise",
         flatAddress: "Centurian Park - Low Rise, Tower C1, Floor 3, Flat 02",
@@ -72,10 +64,6 @@ export async function seedInitialData() {
         isOnline: true,
         restingUntil: null,
         operatingMode: "online",
-        upiId: "sweetoven@upi",
-        bankName: "ICICI Bank",
-        upiDisplayName: "Priya Sharma",
-        qrCodeUrl: "",
         cuisineType: "Eggless Desserts & Bakery",
         society: "Centurian Park - Tropical Garden",
         flatAddress: "Centurian Park - Tropical Garden, Tower F2, Floor 18, Flat 05",
@@ -261,16 +249,16 @@ export async function seedInitialData() {
       }
     ];
 
-    // Save Kitchens
+    // Save Kitchens (strip the app-only `uid`; Supabase uses the `id` column)
     for (const kitchen of mockKitchens) {
-      const docRef = doc(db, "kitchens", kitchen.uid);
-      await setDoc(docRef, kitchen);
+      const { uid, ...kitchenFields } = kitchen as any;
+      await setDoc(doc(db, "kitchens", uid), kitchenFields);
     }
 
-    // Save Profiles
+    // Save Profiles (strip `uid`; Supabase `users` uses `id`)
     for (const profile of mockKitchenProfiles) {
-      const docRef = doc(db, "users", profile.uid);
-      await setDoc(docRef, profile);
+      const { uid, ...profileFields } = profile as any;
+      await setDoc(doc(db, "users", uid), profileFields);
     }
 
     // Save Menu Items
